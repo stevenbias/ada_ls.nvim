@@ -1,0 +1,20 @@
+repos:
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.10.0
+    hooks:
+      - id: commitizen
+        stages: [prepare-commit-msg, commit-msg]
+  # Format Lua code
+  - repo: https://github.com/JohnnyMorganz/StyLua
+    rev: v2.3.1
+    hooks:
+      - id: stylua
+  # Lint Lua code
+  - repo: local
+    hooks:
+      - id: luacheck
+        name: Lint lua code
+        entry: luacheck
+        language: system
+        files: ".*\\.lua$"
+        stages: [pre-commit]
