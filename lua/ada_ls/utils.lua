@@ -1,95 +1,52 @@
 local M = {}
 
-function M.get_ada_ls()
-  local clients = vim.lsp.get_clients({ name = "ada" })
-  if not clients or #clients == 0 then
-    require("gnattest.utils").notify(
-      "Ada LSP client not found",
-      vim.log.levels.WARN
-    )
-    return nil
+M.plugin_name = "Ada_ls"
+
+local function log_lvl_tostring(lvl)
+  if lvl == 0 then
+    return "TRACE"
+  elseif lvl == 1 then
+    return "DEBUG"
+  elseif lvl == 2 then
+    return "INFO"
+  elseif lvl == 3 then
+    return "WARN"
+  elseif lvl == 4 then
+    return "ERROR"
+  elseif lvl == 5 then
+    return "OFF"
   else
-    return clients[1]
+    return "ERROR"
   end
 end
 
-function M.get_root_dir()
-  if M.root_dir ~= nil then
-    return M.root_dir
+function M.notify(msg, lvl)
+  local title = M.plugin_name .. " " .. log_lvl_tostring(lvl) .. " message"
+  if M.is_loaded("notify") then
+    require("notify")(msg, lvl, { title = title })
+  else
+    vim.notify(title .. ": " .. msg, lvl)
   end
-
-  if M.get_ada_ls() ~= nil then
-    M.root_dir = M.get_ada_ls().root_dir
-  end
-  return M.root_dir
 end
 
-local function lsp_request(req)
-  local client = M.get_ada_ls()
-  if not client then
-    return nil, "Ada LSP client not found"
-  end
-
-  local params = vim.lsp.util.make_position_params(0, client.offset_encoding)
-  local result, err = client:request_sync(req, params, 1000)
-
-  if err or not result or not result.result then
-    return nil, err or ("Request '" .. req .. "' failed")
-  end
-
-  return vim.islist(result.result) and result.result or { result.result }
+function M.is_loaded(plugin_name)
+  return pcall(require, plugin_name) -- will also load the package if it isn't loaded already
 end
 
-local function lsp_command(cmd, args)
-  local client = M.get_ada_ls()
-  if not client then
-    return nil, "Ada LSP client not found"
-  end
-
-  local params = {
-    command = cmd,
-    arguments = args,
-  }
-  local result, err =
-    client:request_sync("workspace/executeCommand", params, 1000)
-
-  if err or not result or not result.result then
-    return nil, err or ("Command '" .. cmd .. "' failed")
-  end
-
-  return vim.islist(result.result) and result.result or { result.result }
+function M.get_bufid()
+  return vim.api.nvim_get_current_buf()
 end
 
-function M.get_symbols()
-  return lsp_request("textDocument/documentSymbol")
+function M.get_bufpath()
+  return vim.fn.expand("%")
 end
 
-function M.get_declarations()
-  return lsp_request("textDocument/declaration")
+function M.get_filename()
+  return vim.fs.basename(M.get_bufpath())
 end
 
-function M.get_prj_file()
-  if utils.is_gnattest_file() or M.prj_file ~= "" then
-    return M.prj_file
-  end
-
-  local cmd = lsp_command("als-project-file")
-  if cmd ~= nil and next(cmd) ~= nil then
-    M.prj_file = vim.uri_to_fname(cmd[1])
-  end
-  return M.prj_file
-end
-
-function M.get_prj_file()
-  if utils.is_gnattest_file() or M.prj_file ~= "" then
-    return M.prj_file
-  end
-
-  local cmd = lsp_command("als-project-file")
-  if cmd ~= nil and next(cmd) ~= nil then
-    M.prj_file = vim.uri_to_fname(cmd[1])
-  end
-  return M.prj_file
+function M.get_bufdir()
+  return vim.fs.dirname(M.get_bufpath())
 end
 
 return M

@@ -218,10 +218,3 @@ function M.setup()
 end
 
 return M
-
--- return {
---   cmd = { "ada_language_server" },
---   filetypes = { "ada" },
---   root_dir = vim.fn.getcwd(),
---   on_init = ada_ls_setup,
--- }
