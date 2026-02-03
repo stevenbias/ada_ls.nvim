@@ -13,6 +13,11 @@ local cmd_name = "Als"
 
 ---@type table<string, MyCmdSubcommand>
 local subcommand_tbl = {
+  other = {
+    impl = function()
+      require("ada_ls.lsp_cmd").go_to_other()
+    end,
+  },
   set_project = {
     impl = function()
       require("ada_ls.project").setup()
