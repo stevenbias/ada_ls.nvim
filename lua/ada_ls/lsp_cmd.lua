@@ -1,20 +1,9 @@
 local M = {}
 
-function M.get_ada_ls()
-  local clients = vim.lsp.get_clients({ name = "ada" })
-  if not clients or #clients == 0 then
-    require("ada_ls.utils").notify(
-      "Ada LSP client not found",
-      vim.log.levels.WARN
-    )
-    return nil
-  else
-    return clients[1]
-  end
-end
+local utils = require("ada_ls.utils")
 
 local function lsp_request(req)
-  local client = M.get_ada_ls()
+  local client = utils.get_ada_ls()
   if not client then
     return nil, "Ada LSP client not found"
   end
@@ -30,7 +19,7 @@ local function lsp_request(req)
 end
 
 local function lsp_command(cmd, args)
-  local client = M.get_ada_ls()
+  local client = utils.get_ada_ls()
   if not client then
     return nil, "Ada LSP client not found"
   end
@@ -50,7 +39,7 @@ local function lsp_command(cmd, args)
 end
 
 function M.get_root_dir()
-  return M.get_ada_ls().root_dir
+  return utils.get_ada_ls().root_dir
 end
 
 function M.get_symbols()

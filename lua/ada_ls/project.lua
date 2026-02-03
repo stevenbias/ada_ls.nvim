@@ -197,7 +197,7 @@ function M.setup()
     return
   end
 
-  ada_ls_conf_path = utils.get_root_dir()
+  ada_ls_conf_path = als_root_dir()
   print(ada_ls_conf_path)
 
   local path = ada_ls_conf_path .. "/.als.json"
