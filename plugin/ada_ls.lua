@@ -13,6 +13,14 @@ local cmd_name = "Als"
 
 ---@type table<string, MyCmdSubcommand>
 local subcommand_tbl = {
+  edit_gpr = {
+    impl = function()
+      local grp_uri = require("ada_ls.lsp_cmd").get_prj_file()[1]
+      if grp_uri ~= nil then
+        vim.cmd("edit" .. vim.uri_to_fname(grp_uri))
+      end
+    end,
+  },
   other = {
     impl = function()
       require("ada_ls.lsp_cmd").go_to_other()
