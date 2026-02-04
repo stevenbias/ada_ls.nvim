@@ -13,11 +13,24 @@ local cmd_name = "Als"
 
 ---@type table<string, MyCmdSubcommand>
 local subcommand_tbl = {
+  config = {
+    impl = function()
+      local als = require("ada_ls.utils").get_ada_ls()
+      if als == nil then
+        return
+      end
+
+      local config_path = als.root_dir .. "/.als.json"
+      if config_path then
+        vim.cmd("edit " .. config_path)
+      end
+    end,
+  },
   edit_gpr = {
     impl = function()
-      local grp_uri = require("ada_ls.lsp_cmd").get_prj_file()[1]
-      if grp_uri ~= nil then
-        vim.cmd("edit" .. vim.uri_to_fname(grp_uri))
+      local gpr_uri = require("ada_ls.lsp_cmd").get_prj_file()[1]
+      if gpr_uri then
+        vim.cmd("edit" .. vim.uri_to_fname(gpr_uri))
       end
     end,
   },
