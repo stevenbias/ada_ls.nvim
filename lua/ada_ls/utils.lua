@@ -50,8 +50,10 @@ function M.get_bufdir()
 end
 
 function M.get_ada_ls()
+  local info = debug.getinfo(2).name
   local clients = vim.lsp.get_clients({ name = "ada" })
   if not clients or #clients == 0 then
+    print("No Ada LSP client found for " .. info)
     require("ada_ls.utils").notify(
       "Ada LSP client not found",
       vim.log.levels.WARN

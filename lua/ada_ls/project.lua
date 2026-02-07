@@ -198,7 +198,6 @@ function M.setup()
   end
 
   ada_ls_conf_path = als_root_dir()
-  print(ada_ls_conf_path)
 
   local path = ada_ls_conf_path .. "/.als.json"
   local file = io.open(path, "r")
