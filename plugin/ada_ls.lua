@@ -39,9 +39,9 @@ local subcommand_tbl = {
       require("ada_ls.lsp_cmd").go_to_other()
     end,
   },
-  set_project = {
+  pick_gpr = {
     impl = function()
-      require("ada_ls.project").setup()
+      require("ada_ls.project").pick_gpr_file()
     end,
   },
 }

@@ -114,7 +114,14 @@ local function save_and_notify_config()
   notify_configuration_change(config)
 end
 
-local function pick_project_file(files)
+local function detect_project_files(root_dir)
+  return vim.fs.find(function(name, _)
+    return name:match(".*%.gpr$")
+  end, { path = root_dir, limit = 10, type = "file" })
+end
+
+function M.pick_gpr_file()
+  local files = detect_project_files(ada_ls_conf_path)
   local opts = {}
   local files_number = #files
 
@@ -148,12 +155,6 @@ local function pick_project_file(files)
       })
       :find()
   end
-end
-
-local function detect_project_files(root_dir)
-  return vim.fs.find(function(name, _)
-    return name:match(".*%.gpr$")
-  end, { path = root_dir, limit = 10, type = "file" })
 end
 
 local function decode_json_config(json_config)
@@ -202,13 +203,13 @@ function M.setup()
   local path = ada_ls_conf_path .. "/.als.json"
   local file = io.open(path, "r")
 
-  if file then
-    local json_config = vim.json.decode(file:read("*a"))
-    decode_json_config(json_config)
-    notify_configuration_change(json_config)
-  else
-    pick_project_file(detect_project_files(ada_ls_conf_path))
+  if not file then
+    return
   end
+
+  local json_config = vim.json.decode(file:read("*a"))
+  decode_json_config(json_config)
+  notify_configuration_change(json_config)
   makeprg_setup()
   vim.notify_once(
     "Configuration loaded at " .. ada_ls_conf_path,
