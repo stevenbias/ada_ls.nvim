@@ -54,6 +54,14 @@ function M.get_prj_file()
   return lsp_command("als-project-file")
 end
 
+function M.get_prj_dependencies()
+  local arg = {
+    uri = M.get_prj_file()[1],
+    direction = 1,
+  }
+  return lsp_command("als-gpr-dependencies", arg)
+end
+
 function M.go_to_other()
   local arg = { uri = vim.uri_from_bufnr(0) }
   return lsp_command("als-other-file", arg)
