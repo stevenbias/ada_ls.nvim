@@ -44,24 +44,16 @@ end
 
 local function save_new_configuration(root_dir, config)
   local path = root_dir .. ".als.json"
-  local file_exists = vim.loop.fs_stat(path) ~= nil
 
-  if not file_exists then
-    local file = io.open(path, "w")
-    if not file then
-      vim.notify_once(
-        "Could not save Ada_ls configuration at " .. path,
-        vim.log.levels.ERROR
-      )
-      return
-    end
-    file:write(vim.json.encode(config))
-  else
+  local file = io.open(path, "w")
+  if not file then
     vim.notify_once(
-      "Ada_ls configuration saved at " .. path,
-      vim.log.levels.INFO
+      "Could not save Ada_ls configuration at " .. path,
+      vim.log.levels.ERROR
     )
+    return
   end
+  file:write(vim.json.encode(config))
 end
 
 local function set_scenario_var()
@@ -69,15 +61,32 @@ local function set_scenario_var()
     return
   end
 
-  for line in io.lines(project_file) do
-    for _ in string.gmatch(line, "external") do
-      local match = string.match(line, '[^"%s]+", "[^%s]+"')
-      match = string.gsub(match, '"', "")
-      local var = {}
-      for w in string.gmatch(match, "([^, ]+)") do
-        table.insert(var, w)
+  local config = { ["projectFile"] = project_file }
+  notify_configuration_change(config)
+
+  -- Sommetimes the notification is not immediate
+  require("ada_ls.lsp_cmd").get_prj_file()
+
+  local gpr_files = { project_file }
+  local uri_gpr_files = require("ada_ls.lsp_cmd").get_prj_dependencies()
+
+  if uri_gpr_files and next(uri_gpr_files) then
+    for _, f in pairs(uri_gpr_files) do
+      table.insert(gpr_files, vim.uri_to_fname(f.uri))
+    end
+  end
+
+  for _, file in pairs(gpr_files) do
+    for line in io.lines(file) do
+      for _ in string.gmatch(line, "external") do
+        local match = string.match(line, '[^"%s]+", "[^%s]+"')
+        match = string.gsub(match, '"', "")
+        local var = {}
+        for w in string.gmatch(match, "([^, ]+)") do
+          table.insert(var, w)
+        end
+        scenario_variables[var[1]] = var[2]
       end
-      scenario_variables[var[1]] = var[2]
     end
   end
 end
@@ -96,17 +105,10 @@ local function save_and_notify_config()
   end
 
   local project_file_path = get_path(project_file)
-  local json_file = project_file_path .. ".als.json"
-  local file_exists = vim.loop.fs_stat(json_file) ~= nil
   local config = {}
 
-  if not file_exists then
-    create_config(config)
-    save_new_configuration(project_file_path, config)
-  else
-    vim.notify_once("Custom config found", vim.log.levels.INFO)
-    config = vim.fn.json_decode(vim.fn.readfile(json_file))
-  end
+  create_config(config)
+  save_new_configuration(project_file_path, config)
 
   notify_configuration_change(config)
 end
