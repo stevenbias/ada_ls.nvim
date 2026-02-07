@@ -35,14 +35,11 @@ local function als_root_dir(startpath)
 end
 
 local function notify_configuration_change(config)
-  -- Set the new config and notify the language server
-  vim.notify_once(
-    "Ada_ls configuration:\n" .. vim.inspect(config) .. "\n",
-    vim.log.levels.INFO
-  )
-  local client = assert(vim.lsp.get_clients({ name = "ada" })[1])
   config = { ada = config }
-  client:notify("workspace/didChangeConfiguration", { settings = config })
+  require("ada_ls.utils").notify_server(
+    "workspace/didChangeConfiguration",
+    { settings = config }
+  )
 end
 
 local function save_new_configuration(root_dir, config)
