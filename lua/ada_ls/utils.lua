@@ -64,4 +64,12 @@ function M.get_ada_ls()
   end
 end
 
+function M.notify_server(method, params)
+  local client = M.get_ada_ls()
+  if client ~= nil then
+    return client:notify(method, params)
+  end
+  return false
+end
+
 return M
