@@ -1,6 +1,7 @@
-local M = {}
-
-M.plugin_name = "Ada_ls"
+local M = {
+  als = nil,
+  plugin_name = "Ada_ls",
+}
 
 local function log_lvl_tostring(lvl)
   if lvl == 0 then
@@ -50,6 +51,10 @@ function M.get_bufdir()
 end
 
 function M.get_ada_ls()
+  if M.als ~= nil then
+    return M.als
+  end
+
   local info = debug.getinfo(2).name
   local clients = vim.lsp.get_clients({ name = "ada" })
   if not clients or #clients == 0 then
@@ -60,7 +65,8 @@ function M.get_ada_ls()
     )
     return nil
   else
-    return clients[1]
+    M.als = clients[1]
+    return M.als
   end
 end
 

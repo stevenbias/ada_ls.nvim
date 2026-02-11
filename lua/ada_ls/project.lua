@@ -1,4 +1,6 @@
-local M = {}
+local M = {
+  is_setup = false,
+}
 
 local pickers = require("telescope.pickers")
 local finders = require("telescope.finders")
@@ -187,7 +189,7 @@ local function makeprg_setup()
 end
 
 function M.setup()
-  if vim.opt.diff:get() then
+  if vim.opt.diff:get() or M.is_setup then
     return
   end
 
@@ -214,6 +216,7 @@ function M.setup()
     "Configuration loaded at " .. ada_ls_conf_path,
     vim.log.levels.INFO
   )
+  M.is_setup = true
 end
 
 return M
