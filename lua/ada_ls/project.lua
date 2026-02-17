@@ -2,12 +2,6 @@ local M = {
   is_setup = false,
 }
 
-local pickers = require("telescope.pickers")
-local finders = require("telescope.finders")
-local actions = require("telescope.actions")
-local action_states = require("telescope.actions.state")
-local conf = require("telescope.config").values
-
 local ada_ls_conf_path = ""
 local project_file = ""
 local scenario_variables = {}
@@ -138,15 +132,17 @@ function M.pick_gpr_file()
     set_scenario_var()
     save_and_notify_config()
   else
-    pickers
+    require("telescope.pickers")
       .new(opts, {
         prompt_title = "Ada project files picker",
-        finder = finders.new_table({ results = files }),
-        sorter = conf.generic_sorter(opts),
+        finder = require("telescope.finders").new_table({ results = files }),
+        sorter = require("telescope.config").values.generic_sorter(opts),
         attach_mappings = function(prompt_buffer, _)
+          local actions = require("telescope.actions")
           actions.select_default:replace(function()
             actions.close(prompt_buffer)
-            local selection = action_states.get_selected_entry()
+            local selection =
+              require("telescope.actions.state").get_selected_entry()
             project_file = selection[1]
             set_scenario_var()
             save_and_notify_config()
