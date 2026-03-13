@@ -112,6 +112,7 @@ local function save_and_notify_config()
   save_new_configuration(project_file_path, config)
 
   notify_configuration_change(config)
+  makeprg_setup()
 end
 
 local function detect_project_files(root_dir)
