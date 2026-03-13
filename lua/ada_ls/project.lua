@@ -53,6 +53,10 @@ local function save_new_configuration(root_dir, config)
   file:close()
 end
 
+local function makeprg_setup()
+  vim.cmd("let &makeprg='" .. M.gprbuild_cmd() .. "'")
+end
+
 local function set_scenario_var()
   if project_file == "" then
     return
@@ -182,17 +186,18 @@ local function decode_json_config(json_config_path)
   return json_config
 end
 
-local function makeprg_setup()
+function M.gprbuild_cmd()
+  decode_json_config(require("ada_ls.utils").get_conf_file())
   if project_file == "" then
     vim.notify_once("No Ada project file selected.", vim.log.levels.WARN)
     return
   end
-  vim.cmd(
-    "set makeprg=gprbuild\\ "
-      .. "\\ -d\\ -p\\ "
-      .. scenario_vars_string
-      .. "\\ -P\\ "
-      .. project_file
+  return (
+    "gprbuild "
+    .. " -d -p "
+    .. scenario_vars_string
+    .. "-P "
+    .. project_file
   )
 end
 
