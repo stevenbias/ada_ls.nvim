@@ -41,7 +41,7 @@ end
 local function save_new_configuration(root_dir, config)
   local path = root_dir .. ".als.json"
 
-  local file = io.open(path, "w")
+  local file = io.open(path, "w+")
   if not file then
     vim.notify_once(
       "Could not save Ada_ls configuration at " .. path,
@@ -50,6 +50,7 @@ local function save_new_configuration(root_dir, config)
     return
   end
   file:write(vim.json.encode(config))
+  file:close()
 end
 
 local function set_scenario_var()
