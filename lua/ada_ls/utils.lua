@@ -70,6 +70,15 @@ function M.get_ada_ls()
   end
 end
 
+function M.get_conf_file()
+  local als = require("ada_ls.utils").get_ada_ls()
+  if als == nil then
+    return
+  end
+
+  return als.root_dir .. "/.als.json"
+end
+
 function M.notify_server(method, params)
   local client = M.get_ada_ls()
   if client ~= nil then
