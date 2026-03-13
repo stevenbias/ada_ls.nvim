@@ -155,20 +155,31 @@ function M.pick_gpr_file()
   end
 end
 
-local function decode_json_config(json_config)
+local function decode_json_config(json_config_path)
+  local json_config = ""
+  local file = io.open(json_config_path, "r")
+  if not file then
+    return json_config
+  end
+
+  json_config = vim.json.decode(file:read("*a"))
+  file:close()
+
   if json_config["projectFile"] then
     project_file = json_config["projectFile"]
   end
   if json_config["scenarioVariables"] then
+    scenario_vars_string = ""
     for k, v in pairs(json_config["scenarioVariables"]) do
       scenario_vars_string = scenario_vars_string
         .. "-X"
         .. k
         .. "="
         .. tostring(v)
-        .. "\\ "
+        .. " "
     end
   end
+  return json_config
 end
 
 local function makeprg_setup()
@@ -199,14 +210,12 @@ function M.setup()
   ada_ls_conf_path = als_root_dir()
 
   local path = ada_ls_conf_path .. "/.als.json"
-  local file = io.open(path, "r")
 
-  if not file then
+  if vim.fn.filereadable(path) ~= 1 then
     return
   end
 
-  local json_config = vim.json.decode(file:read("*a"))
-  decode_json_config(json_config)
+  local json_config = decode_json_config(path)
   notify_configuration_change(json_config)
   makeprg_setup()
   vim.notify_once(
