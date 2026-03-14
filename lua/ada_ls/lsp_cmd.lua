@@ -55,6 +55,10 @@ function M.get_prj_file()
 end
 
 function M.get_prj_dependencies()
+  local prj_file = M.get_prj_file()
+  if not prj_file or #prj_file == 0 then
+    return nil, "No project file found"
+  end
   local arg = {
     uri = M.get_prj_file()[1],
     direction = 1,
