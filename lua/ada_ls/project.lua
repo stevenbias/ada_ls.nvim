@@ -53,10 +53,6 @@ local function save_new_configuration(root_dir, config)
   file:close()
 end
 
-local function makeprg_setup()
-  vim.cmd("let &makeprg='" .. M.gprbuild_cmd() .. "'")
-end
-
 local function set_scenario_var()
   if project_file == "" then
     return
@@ -99,6 +95,19 @@ local function create_config(config)
   end
 end
 
+local function update_makeprg_setup()
+  require("ada_ls.gpr").makeprg_setup()
+  local conf_file = require("ada_ls.utils").get_conf_file()
+  local group = vim.api.nvim_create_augroup("AdaLsMakeprg", { clear = true })
+  vim.api.nvim_create_autocmd("BufWritePost", {
+    group = group,
+    pattern = conf_file,
+    callback = function()
+      require("ada_ls.gpr").makeprg_setup()
+    end,
+  })
+end
+
 local function save_and_notify_config()
   if project_file == "" then
     vim.notify_once("No Ada project file selected.", vim.log.levels.WARN)
@@ -112,7 +121,7 @@ local function save_and_notify_config()
   save_new_configuration(project_file_path, config)
 
   notify_configuration_change(config)
-  makeprg_setup()
+  update_makeprg_setup()
 end
 
 local function detect_project_files(root_dir)
@@ -133,7 +142,10 @@ function M.pick_gpr_file()
     )
     return
   elseif files_number == 1 then
-    print("Only one Ada project file found: " .. files[1])
+    require("ada_ls.utils").notify(
+      "Only one Ada project file found: " .. files[1],
+      vim.log.levels.INFO
+    )
     project_file = files[1]
     set_scenario_var()
     save_and_notify_config()
@@ -160,7 +172,7 @@ function M.pick_gpr_file()
   end
 end
 
-local function decode_json_config(json_config_path)
+function M.decode_json_config(json_config_path)
   local json_config = ""
   local file = io.open(json_config_path, "r")
   if not file then
@@ -184,22 +196,7 @@ local function decode_json_config(json_config_path)
         .. " "
     end
   end
-  return json_config
-end
-
-function M.gprbuild_cmd()
-  decode_json_config(require("ada_ls.utils").get_conf_file())
-  if project_file == "" then
-    vim.notify_once("No Ada project file selected.", vim.log.levels.WARN)
-    return
-  end
-  return (
-    "gprbuild "
-    .. " -d -p "
-    .. scenario_vars_string
-    .. "-P "
-    .. project_file
-  )
+  return project_file, scenario_vars_string, json_config
 end
 
 function M.setup()
@@ -221,11 +218,11 @@ function M.setup()
     return
   end
 
-  local json_config = decode_json_config(path)
+  local _, _, json_config = M.decode_json_config(path)
   notify_configuration_change(json_config)
-  makeprg_setup()
+  require("ada_ls.gpr").makeprg_setup()
   vim.notify_once(
-    "Configuration loaded at " .. ada_ls_conf_path,
+    "Configuration loaded from " .. ada_ls_conf_path,
     vim.log.levels.INFO
   )
   M.is_setup = true
