@@ -2,29 +2,29 @@ local M = {
   is_setup = false,
 }
 
-local ada_ls_conf_path = ""
 local project_file = ""
 local scenario_variables = {}
-local scenario_vars_string = ""
 
-local function get_path(str)
-  return str:match("(.*[/\\])")
+local function get_abspath(str)
+  local abspath = vim.fs.abspath(str)
+  return abspath:match("(.*[/\\])")
 end
 
 local function als_root_dir(startpath)
   local gpr_file = vim.fs.find(function(name)
     return name:match(".*%.gpr$")
-  end, { upward = true })[1]
+  end, { upward = true, path = startpath, limit = 10 })[1]
   local gpr_path = vim.fs.dirname(gpr_file)
 
   if gpr_path then
-    ada_ls_conf_path = gpr_path
+    return gpr_path
+  end
+
+  local ada_ls_conf_path
+  if vim.fn.isdirectory(".git") == 0 then
+    ada_ls_conf_path = vim.fs.dirname(startpath)
   else
-    if vim.fn.isdirectory(".git") == 0 then
-      ada_ls_conf_path = vim.fs.dirname(startpath)
-    else
-      ada_ls_conf_path = startpath
-    end
+    ada_ls_conf_path = startpath
   end
 
   return ada_ls_conf_path
@@ -61,7 +61,7 @@ local function set_scenario_var()
   local config = { ["projectFile"] = project_file }
   notify_configuration_change(config)
 
-  -- Sommetimes the notification is not immediate
+  -- Sometimes the notification is not immediate
   require("ada_ls.lsp_cmd").get_prj_file()
 
   local gpr_files = { project_file }
@@ -114,7 +114,7 @@ local function save_and_notify_config()
     return
   end
 
-  local project_file_path = get_path(project_file)
+  local project_file_path = get_abspath(project_file)
   local config = {}
 
   create_config(config)
@@ -125,13 +125,23 @@ local function save_and_notify_config()
 end
 
 local function detect_project_files(root_dir)
-  return vim.fs.find(function(name, _)
+  local find_downward = vim.fs.find(function(name, _)
     return name:match(".*%.gpr$")
   end, { path = root_dir, limit = 10, type = "file" })
+
+  if find_downward and next(find_downward) then
+    return find_downward
+  else
+    return vim.fs.find(function(name)
+      return name:match(".*%.gpr$")
+    end, { upward = true, path = root_dir, limit = 10, type = "file" })
+  end
 end
 
 function M.pick_gpr_file()
-  local files = detect_project_files(ada_ls_conf_path)
+  local utils = require("ada_ls.utils")
+  local files =
+    detect_project_files(als_root_dir(get_abspath(utils.get_bufpath())))
   local opts = {}
   local files_number = #files
 
@@ -142,7 +152,7 @@ function M.pick_gpr_file()
     )
     return
   elseif files_number == 1 then
-    require("ada_ls.utils").notify(
+    utils.notify(
       "Only one Ada project file found: " .. files[1],
       vim.log.levels.INFO
     )
@@ -173,27 +183,30 @@ function M.pick_gpr_file()
 end
 
 function M.decode_json_config(json_config_path)
-  local json_config = ""
   local file = io.open(json_config_path, "r")
   if not file then
-    return json_config
+    return nil, nil, nil
   end
 
-  json_config = vim.json.decode(file:read("*a"))
+  local raw = file:read("*a")
   file:close()
+
+  local ok, json_config = pcall(vim.json.decode, raw)
+  if not ok then
+    return nil, nil, nil
+  end
 
   if json_config["projectFile"] then
     project_file = json_config["projectFile"]
   end
+  local scenario_vars_string = ""
   if json_config["scenarioVariables"] then
-    scenario_vars_string = ""
     for k, v in pairs(json_config["scenarioVariables"]) do
       scenario_vars_string = scenario_vars_string
-        .. "-X"
+        .. " -X"
         .. k
         .. "="
         .. tostring(v)
-        .. " "
     end
   end
   return project_file, scenario_vars_string, json_config
@@ -210,7 +223,7 @@ function M.setup()
     return
   end
 
-  ada_ls_conf_path = als_root_dir()
+  local ada_ls_conf_path = als_root_dir(get_abspath(utils.get_bufpath()))
 
   local path = ada_ls_conf_path .. "/.als.json"
 
@@ -219,6 +232,14 @@ function M.setup()
   end
 
   local _, _, json_config = M.decode_json_config(path)
+  if not json_config then
+    utils.notify(
+      "Failed to decode Ada LSP configuration from " .. path,
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
   notify_configuration_change(json_config)
   require("ada_ls.gpr").makeprg_setup()
   vim.notify_once(

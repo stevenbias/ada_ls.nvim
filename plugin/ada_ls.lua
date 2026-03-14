@@ -28,16 +28,19 @@ local subcommand_tbl = {
     impl = function()
       local config_path = require("ada_ls.utils").get_conf_file()
       if config_path then
-        vim.cmd("edit " .. config_path)
+        vim.cmd.edit(config_path)
       end
     end,
   },
   edit_gpr = {
     impl = function()
-      local gpr_uri = require("ada_ls.lsp_cmd").get_prj_file()[1]
-      if gpr_uri then
-        vim.cmd("edit" .. vim.uri_to_fname(gpr_uri))
+      local notify = require("ada_ls.utils").notify
+      local gpr_uri = require("ada_ls.lsp_cmd").get_prj_file()
+      if not gpr_uri then
+        notify("No project file found.", vim.log.levels.WARN)
+        return
       end
+      vim.cmd.edit(vim.uri_to_fname(gpr_uri))
     end,
   },
   other = {

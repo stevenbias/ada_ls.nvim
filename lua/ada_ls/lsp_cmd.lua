@@ -39,6 +39,10 @@ local function lsp_command(cmd, args)
 end
 
 function M.get_root_dir()
+  local client = utils.get_ada_ls()
+  if not client then
+    return nil
+  end
   return utils.get_ada_ls().root_dir
 end
 
@@ -51,16 +55,20 @@ function M.get_declarations()
 end
 
 function M.get_prj_file()
-  return lsp_command("als-project-file")
+  local prj_file = lsp_command("als-project-file")
+  if not prj_file or #prj_file == 0 then
+    return nil, "No project file found"
+  end
+  return prj_file[1]
 end
 
 function M.get_prj_dependencies()
   local prj_file = M.get_prj_file()
-  if not prj_file or #prj_file == 0 then
+  if not prj_file then
     return nil, "No project file found"
   end
   local arg = {
-    uri = M.get_prj_file()[1],
+    uri = prj_file,
     direction = 1,
   }
   return lsp_command("als-gpr-dependencies", arg)

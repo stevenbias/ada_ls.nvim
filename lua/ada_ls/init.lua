@@ -1,8 +1,10 @@
 local M = {}
 
+local group = vim.api.nvim_create_augroup("AdaLsSetup", { clear = true })
+
 function M.setup()
   vim.api.nvim_create_autocmd("LspAttach", {
-    group = vim.api.nvim_create_augroup("AdaLsSetup", { clear = true }),
+    group = group,
     pattern = {
       "*.ad[bs]",
     },

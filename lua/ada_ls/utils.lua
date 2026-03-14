@@ -23,14 +23,14 @@ end
 
 function M.notify(msg, lvl)
   local title = M.plugin_name .. " " .. log_lvl_tostring(lvl) .. " message"
-  if M.is_loaded("notify") then
+  if M.try_require("notify") then
     require("notify")(msg, lvl, { title = title })
   else
     vim.notify(title .. ": " .. msg, lvl)
   end
 end
 
-function M.is_loaded(plugin_name)
+function M.try_require(plugin_name)
   return pcall(require, plugin_name) -- will also load the package if it isn't loaded already
 end
 
@@ -55,14 +55,16 @@ function M.get_ada_ls()
     return M.als
   end
 
-  local info = debug.getinfo(2).name
+  local info = ""
+  local debug_info = debug.getinfo(2)
+
+  if debug_info then
+    info = debug_info.name
+  end
+
   local clients = vim.lsp.get_clients({ name = "ada" })
   if not clients or #clients == 0 then
-    print("No Ada LSP client found for " .. info)
-    require("ada_ls.utils").notify(
-      "Ada LSP client not found",
-      vim.log.levels.WARN
-    )
+    M.notify("Ada LSP client not found for " .. info, vim.log.levels.WARN)
     return nil
   else
     M.als = clients[1]
@@ -71,12 +73,12 @@ function M.get_ada_ls()
 end
 
 function M.get_conf_file()
-  local als = require("ada_ls.utils").get_ada_ls()
-  if als == nil then
+  local root_dir = require("ada_ls.lsp_cmd").get_root_dir()
+  if root_dir == nil then
     return
   end
 
-  return als.root_dir .. "/.als.json"
+  return root_dir .. "/.als.json"
 end
 
 function M.notify_server(method, params)
