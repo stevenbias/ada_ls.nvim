@@ -13,14 +13,20 @@ local cmd_name = "Als"
 
 ---@type table<string, MyCmdSubcommand>
 local subcommand_tbl = {
+  build = {
+    impl = function()
+      vim.cmd("cclose")
+      vim.cmd("make")
+    end,
+  },
+  clean = {
+    impl = function()
+      require("ada_ls.gpr").clean()
+    end,
+  },
   config = {
     impl = function()
-      local als = require("ada_ls.utils").get_ada_ls()
-      if als == nil then
-        return
-      end
-
-      local config_path = als.root_dir .. "/.als.json"
+      local config_path = require("ada_ls.utils").get_conf_file()
       if config_path then
         vim.cmd("edit " .. config_path)
       end
