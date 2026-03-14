@@ -61,14 +61,4 @@ function M.makeprg_setup()
   vim.o.errorformat = err_format
 end
 
--- auto-open quickfix only when :make produced entries
-vim.api.nvim_create_autocmd("QuickFixCmdPost", {
-  pattern = "make",
-  callback = function()
-    if #vim.fn.getqflist() > 0 then
-      vim.cmd("copen")
-    end
-  end,
-})
-
 return M
