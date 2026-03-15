@@ -1,8 +1,7 @@
 local M = {}
 
-local utils = require("ada_ls.utils")
-
 local function lsp_request(req)
+  local utils = require("ada_ls.utils")
   local client = utils.get_ada_ls()
   if not client then
     return nil, "Ada LSP client not found"
@@ -19,6 +18,7 @@ local function lsp_request(req)
 end
 
 local function lsp_command(cmd, args)
+  local utils = require("ada_ls.utils")
   local client = utils.get_ada_ls()
   if not client then
     return nil, "Ada LSP client not found"
@@ -39,11 +39,12 @@ local function lsp_command(cmd, args)
 end
 
 function M.get_root_dir()
+  local utils = require("ada_ls.utils")
   local client = utils.get_ada_ls()
   if not client then
     return nil
   end
-  return utils.get_ada_ls().root_dir
+  return client.root_dir
 end
 
 function M.get_symbols()

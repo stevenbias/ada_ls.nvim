@@ -95,22 +95,10 @@ local function create_config(config)
   end
 end
 
-local function update_makeprg_setup()
-  require("ada_ls.gpr").makeprg_setup()
-  local conf_file = require("ada_ls.utils").get_conf_file()
-  local group = vim.api.nvim_create_augroup("AdaLsMakeprg", { clear = true })
-  vim.api.nvim_create_autocmd("BufWritePost", {
-    group = group,
-    pattern = conf_file,
-    callback = function()
-      require("ada_ls.gpr").makeprg_setup()
-    end,
-  })
-end
-
-local function save_and_notify_config()
+local function save_config()
+  local utils = require("ada_ls.utils")
   if project_file == "" then
-    vim.notify_once("No Ada project file selected.", vim.log.levels.WARN)
+    utils.notify("No Ada project file selected.", vim.log.levels.WARN)
     return
   end
 
@@ -120,8 +108,7 @@ local function save_and_notify_config()
   create_config(config)
   save_new_configuration(project_file_path, config)
 
-  notify_configuration_change(config)
-  update_makeprg_setup()
+  require("ada_ls.utils").reset_als_client()
 end
 
 local function detect_project_files(root_dir)
@@ -158,7 +145,7 @@ function M.pick_gpr_file()
     )
     project_file = files[1]
     set_scenario_var()
-    save_and_notify_config()
+    save_config()
   else
     require("telescope.pickers")
       .new(opts, {
@@ -173,7 +160,7 @@ function M.pick_gpr_file()
               require("telescope.actions.state").get_selected_entry()
             project_file = selection[1]
             set_scenario_var()
-            save_and_notify_config()
+            save_config()
           end)
           return true
         end,
@@ -247,6 +234,12 @@ function M.setup()
     vim.log.levels.INFO
   )
   M.is_setup = true
+end
+
+function M.clear()
+  project_file = ""
+  scenario_variables = {}
+  M.is_setup = false
 end
 
 return M

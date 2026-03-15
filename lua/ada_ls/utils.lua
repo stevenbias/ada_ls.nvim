@@ -55,17 +55,9 @@ function M.get_ada_ls()
     return M.als
   end
 
-  local info = ""
-  local debug_info = debug.getinfo(2)
-
-  if debug_info then
-    info = debug_info.name
-  end
-
   local clients = vim.lsp.get_clients({ name = "ada" })
   if not clients or #clients == 0 then
-    M.notify("Ada LSP client not found for " .. info, vim.log.levels.WARN)
-    return nil
+    return nil, "Ada LSP client not found"
   else
     M.als = clients[1]
     return M.als
@@ -87,6 +79,20 @@ function M.notify_server(method, params)
     return client:notify(method, params)
   end
   return false
+end
+
+function M.reset_als_client()
+  M.clear()
+  for _, client in pairs(vim.lsp.get_clients({ name = "ada" })) do
+    client:stop(true)
+  end
+  vim.defer_fn(function()
+    vim.cmd("e") -- Reopen buffer to trigger LSP attach
+  end, 100)
+end
+
+function M.clear()
+  M.als = nil
 end
 
 return M
