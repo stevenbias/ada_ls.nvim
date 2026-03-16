@@ -1,9 +1,8 @@
 local M = {
   is_setup = false,
+  project_file = "",
+  scenario_variables = {},
 }
-
-local project_file = ""
-local scenario_variables = {}
 
 local function get_abspath(str)
   local abspath = vim.fs.abspath(str)
@@ -39,7 +38,7 @@ local function notify_configuration_change(config)
 end
 
 local function save_new_configuration(root_dir, config)
-  local path = root_dir .. ".als.json"
+  local path = vim.fs.joinpath(root_dir, ".als.json")
 
   local file = io.open(path, "w+")
   if not file then
@@ -54,17 +53,17 @@ local function save_new_configuration(root_dir, config)
 end
 
 local function set_scenario_var()
-  if project_file == "" then
+  if M.project_file == "" then
     return
   end
 
-  local config = { ["projectFile"] = project_file }
+  local config = { ["projectFile"] = M.project_file }
   notify_configuration_change(config)
 
   -- Sometimes the notification is not immediate
   require("ada_ls.lsp_cmd").get_prj_file()
 
-  local gpr_files = { project_file }
+  local gpr_files = { M.project_file }
   local uri_gpr_files = require("ada_ls.lsp_cmd").get_prj_dependencies()
 
   if uri_gpr_files and next(uri_gpr_files) then
@@ -74,6 +73,14 @@ local function set_scenario_var()
   end
 
   for _, file in pairs(gpr_files) do
+    if not file or vim.fn.filereadable(file) ~= 1 then
+      require("ada_ls.utils").notify(
+        "Could not read Ada project file: " .. file,
+        vim.log.levels.WARN
+      )
+      return
+    end
+
     for line in io.lines(file) do
       for _ in string.gmatch(line, "external") do
         local match = string.match(line, '[^"%s]+", "[^%s]+"')
@@ -82,27 +89,27 @@ local function set_scenario_var()
         for w in string.gmatch(match, "([^, ]+)") do
           table.insert(var, w)
         end
-        scenario_variables[var[1]] = var[2]
+        M.scenario_variables[var[1]] = var[2]
       end
     end
   end
 end
 
 local function create_config(config)
-  config["projectFile"] = project_file
-  if next(scenario_variables) ~= nil then
-    config["scenarioVariables"] = scenario_variables
+  config["projectFile"] = M.project_file
+  if next(M.scenario_variables) ~= nil then
+    config["scenarioVariables"] = M.scenario_variables
   end
 end
 
 local function save_config()
   local utils = require("ada_ls.utils")
-  if project_file == "" then
+  if M.project_file == "" then
     utils.notify("No Ada project file selected.", vim.log.levels.WARN)
     return
   end
 
-  local project_file_path = get_abspath(project_file)
+  local project_file_path = get_abspath(M.project_file)
   local config = {}
 
   create_config(config)
@@ -112,7 +119,7 @@ local function save_config()
 end
 
 local function detect_project_files(root_dir)
-  local find_downward = vim.fs.find(function(name, _)
+  local find_downward = vim.fs.find(function(name)
     return name:match(".*%.gpr$")
   end, { path = root_dir, limit = 10, type = "file" })
 
@@ -143,7 +150,7 @@ function M.pick_gpr_file()
       "Only one Ada project file found: " .. files[1],
       vim.log.levels.INFO
     )
-    project_file = files[1]
+    M.project_file = files[1]
     set_scenario_var()
     save_config()
   else
@@ -158,7 +165,7 @@ function M.pick_gpr_file()
             actions.close(prompt_buffer)
             local selection =
               require("telescope.actions.state").get_selected_entry()
-            project_file = selection[1]
+            M.project_file = selection[1]
             set_scenario_var()
             save_config()
           end)
@@ -184,7 +191,7 @@ function M.decode_json_config(json_config_path)
   end
 
   if json_config["projectFile"] then
-    project_file = json_config["projectFile"]
+    M.project_file = json_config["projectFile"]
   end
   local scenario_vars_string = ""
   if json_config["scenarioVariables"] then
@@ -196,7 +203,7 @@ function M.decode_json_config(json_config_path)
         .. tostring(v)
     end
   end
-  return project_file, scenario_vars_string, json_config
+  return M.project_file, scenario_vars_string, json_config
 end
 
 function M.setup()
@@ -212,7 +219,7 @@ function M.setup()
 
   local ada_ls_conf_path = als_root_dir(get_abspath(utils.get_bufpath()))
 
-  local path = ada_ls_conf_path .. "/.als.json"
+  local path = vim.fs.joinpath(ada_ls_conf_path, ".als.json")
 
   if vim.fn.filereadable(path) ~= 1 then
     return
@@ -237,8 +244,8 @@ function M.setup()
 end
 
 function M.clear()
-  project_file = ""
-  scenario_variables = {}
+  M.project_file = ""
+  M.scenario_variables = {}
   M.is_setup = false
 end
 

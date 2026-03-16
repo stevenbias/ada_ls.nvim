@@ -8,7 +8,7 @@ local function lsp_request(req)
   end
 
   local params = vim.lsp.util.make_position_params(0, client.offset_encoding)
-  local result, err = client:request_sync(req, params, 1000)
+  local result, err = client:request_sync(req, params, 5000)
 
   if err or not result or not result.result then
     return nil, err or ("Request '" .. req .. "' failed")
@@ -29,7 +29,7 @@ local function lsp_command(cmd, args)
     arguments = { args },
   }
   local result, err =
-    client:request_sync("workspace/executeCommand", params, 1000)
+    client:request_sync("workspace/executeCommand", params, 5000)
 
   if err or not result or not result.result then
     return nil, err or ("Command '" .. cmd .. "' failed")

@@ -3,22 +3,9 @@ local M = {
   plugin_name = "Ada_ls",
 }
 
+local LOG_LEVELS = { [0] = "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "OFF" }
 local function log_lvl_tostring(lvl)
-  if lvl == 0 then
-    return "TRACE"
-  elseif lvl == 1 then
-    return "DEBUG"
-  elseif lvl == 2 then
-    return "INFO"
-  elseif lvl == 3 then
-    return "WARN"
-  elseif lvl == 4 then
-    return "ERROR"
-  elseif lvl == 5 then
-    return "OFF"
-  else
-    return "ERROR"
-  end
+  return LOG_LEVELS[lvl] or "ERROR"
 end
 
 function M.notify(msg, lvl)

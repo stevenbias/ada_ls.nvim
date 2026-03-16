@@ -30,14 +30,14 @@ local function gprbuild_cmd()
   local notify = require("ada_ls.utils").notify
   if conf_file == nil then
     notify("No configuration file found", vim.log.levels.WARN)
-    return
+    return nil
   end
 
   local prj_file, scenar_vars =
     require("ada_ls.project").decode_json_config(conf_file)
   if not prj_file then
     notify("No Ada project file selected.", vim.log.levels.WARN)
-    return
+    return nil
   end
   return ("gprbuild" .. " -d -p -gnatef" .. scenar_vars .. " -P " .. prj_file)
 end
