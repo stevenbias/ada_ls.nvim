@@ -1,15 +1,14 @@
 local M = {}
 
-local utils = require("ada_ls.utils")
-
 local function lsp_request(req)
+  local utils = require("ada_ls.utils")
   local client = utils.get_ada_ls()
   if not client then
     return nil, "Ada LSP client not found"
   end
 
   local params = vim.lsp.util.make_position_params(0, client.offset_encoding)
-  local result, err = client:request_sync(req, params, 1000)
+  local result, err = client:request_sync(req, params, 5000)
 
   if err or not result or not result.result then
     return nil, err or ("Request '" .. req .. "' failed")
@@ -19,6 +18,7 @@ local function lsp_request(req)
 end
 
 local function lsp_command(cmd, args)
+  local utils = require("ada_ls.utils")
   local client = utils.get_ada_ls()
   if not client then
     return nil, "Ada LSP client not found"
@@ -29,7 +29,7 @@ local function lsp_command(cmd, args)
     arguments = { args },
   }
   local result, err =
-    client:request_sync("workspace/executeCommand", params, 1000)
+    client:request_sync("workspace/executeCommand", params, 5000)
 
   if err or not result or not result.result then
     return nil, err or ("Command '" .. cmd .. "' failed")
@@ -39,7 +39,12 @@ local function lsp_command(cmd, args)
 end
 
 function M.get_root_dir()
-  return utils.get_ada_ls().root_dir
+  local utils = require("ada_ls.utils")
+  local client = utils.get_ada_ls()
+  if not client then
+    return nil
+  end
+  return client.root_dir
 end
 
 function M.get_symbols()
@@ -51,16 +56,20 @@ function M.get_declarations()
 end
 
 function M.get_prj_file()
-  return lsp_command("als-project-file")
+  local prj_file = lsp_command("als-project-file")
+  if not prj_file or #prj_file == 0 then
+    return nil, "No project file found"
+  end
+  return prj_file[1]
 end
 
 function M.get_prj_dependencies()
   local prj_file = M.get_prj_file()
-  if not prj_file or #prj_file == 0 then
+  if not prj_file then
     return nil, "No project file found"
   end
   local arg = {
-    uri = M.get_prj_file()[1],
+    uri = prj_file,
     direction = 1,
   }
   return lsp_command("als-gpr-dependencies", arg)

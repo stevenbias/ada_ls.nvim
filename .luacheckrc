@@ -3,5 +3,6 @@ read_globals = {
   "vim",
 }
 globals = {
+  "vim.o",
   "vim.g",
 }

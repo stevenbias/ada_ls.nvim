@@ -3,34 +3,21 @@ local M = {
   plugin_name = "Ada_ls",
 }
 
+local LOG_LEVELS = { [0] = "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "OFF" }
 local function log_lvl_tostring(lvl)
-  if lvl == 0 then
-    return "TRACE"
-  elseif lvl == 1 then
-    return "DEBUG"
-  elseif lvl == 2 then
-    return "INFO"
-  elseif lvl == 3 then
-    return "WARN"
-  elseif lvl == 4 then
-    return "ERROR"
-  elseif lvl == 5 then
-    return "OFF"
-  else
-    return "ERROR"
-  end
+  return LOG_LEVELS[lvl] or "ERROR"
 end
 
 function M.notify(msg, lvl)
   local title = M.plugin_name .. " " .. log_lvl_tostring(lvl) .. " message"
-  if M.is_loaded("notify") then
+  if M.try_require("notify") then
     require("notify")(msg, lvl, { title = title })
   else
     vim.notify(title .. ": " .. msg, lvl)
   end
 end
 
-function M.is_loaded(plugin_name)
+function M.try_require(plugin_name)
   return pcall(require, plugin_name) -- will also load the package if it isn't loaded already
 end
 
@@ -55,15 +42,9 @@ function M.get_ada_ls()
     return M.als
   end
 
-  local info = debug.getinfo(2).name
   local clients = vim.lsp.get_clients({ name = "ada" })
   if not clients or #clients == 0 then
-    print("No Ada LSP client found for " .. info)
-    require("ada_ls.utils").notify(
-      "Ada LSP client not found",
-      vim.log.levels.WARN
-    )
-    return nil
+    return nil, "Ada LSP client not found"
   else
     M.als = clients[1]
     return M.als
@@ -71,12 +52,12 @@ function M.get_ada_ls()
 end
 
 function M.get_conf_file()
-  local als = require("ada_ls.utils").get_ada_ls()
-  if als == nil then
+  local root_dir = require("ada_ls.lsp_cmd").get_root_dir()
+  if root_dir == nil then
     return
   end
 
-  return als.root_dir .. "/.als.json"
+  return root_dir .. "/.als.json"
 end
 
 function M.notify_server(method, params)
@@ -85,6 +66,20 @@ function M.notify_server(method, params)
     return client:notify(method, params)
   end
   return false
+end
+
+function M.reset_als_client()
+  M.clear()
+  for _, client in pairs(vim.lsp.get_clients({ name = "ada" })) do
+    client:stop(true)
+  end
+  vim.defer_fn(function()
+    vim.cmd("e") -- Reopen buffer to trigger LSP attach
+  end, 100)
+end
+
+function M.clear()
+  M.als = nil
 end
 
 return M
