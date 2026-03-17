@@ -82,4 +82,9 @@ function M.clear()
   M.als = nil
 end
 
+-- Test-specific exports - only exposed in test mode
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._log_lvl_tostring = log_lvl_tostring
+end
+
 return M

@@ -61,4 +61,9 @@ function M.makeprg_setup()
   vim.o.errorformat = err_format
 end
 
+-- Test-specific exports - only exposed in test mode
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._gprbuild_cmd = gprbuild_cmd
+end
+
 return M

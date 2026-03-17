@@ -1,0 +1,122 @@
+name: CI
+on:
+  push:
+    branches: ['*']
+  pull_request:
+    branches: ['*']
+permissions:
+  contents: read
+  checks: write
+jobs:
+  format-check:
+    name: Code Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --color always --check lua/ plugin/ after/ spec/
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    needs: format-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lunarmodules/luacheck@v1
+  test-matrix:
+    name: Test on Neovim ${{ matrix.neovim_version }}
+    runs-on: ubuntu-latest
+    needs: code-quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - neovim_version: 'stable'
+          - neovim_version: 'nightly'
+    steps:
+      - name: Prepare
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y luarocks
+          sudo luarocks install luacov
+      - uses: actions/checkout@v4
+      - name: Run tests with coverage
+        uses: nvim-neorocks/nvim-busted-action@v1
+        env:
+          ADA_LS_TEST_MODE: "1"
+        with:
+          nvim_version: ${{ matrix.neovim_version }}
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.neovim_version }}
+          path: |-
+            luacov.stats.out
+            luacov.report.out
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: test-matrix
+    steps:
+      - name: Prepare
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y luarocks
+          sudo luarocks install luacov
+      - uses: actions/checkout@v4
+      - name: Download stable coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-stable
+      - name: Generate coverage report and check threshold
+        run: |
+          # Generate coverage report
+          luacov
+
+          # Display coverage summary
+          echo "=== Coverage Summary ==="
+
+          COVERAGE_LINE=$(tail -n 1 luacov.report.out)
+          echo "Coverage line: $COVERAGE_LINE"
+
+          # Parse percentage from format like "Total:       123  456   78.90%"
+          # The percentage is the last field
+          COVERAGE_PERCENT=$(echo "$COVERAGE_LINE" | awk '{print $NF}')
+          echo "Coverage percentage: $COVERAGE_PERCENT"
+
+          # Validate that we got a percentage
+          if [[ ! "$COVERAGE_PERCENT" =~ %$ ]]; then
+            echo "ERROR: Could not parse coverage percentage from: $COVERAGE_LINE"
+            exit 1
+          fi
+
+          # Convert to integer for comparison (remove decimal and % sign)
+          COVERAGE_INT=$(echo "$COVERAGE_PERCENT" | sed 's/%.*//' | sed 's/\..*//')
+          echo "Coverage as integer: $COVERAGE_INT"
+
+          # Validate that we got a valid integer
+          if ! [[ "$COVERAGE_INT" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: Invalid coverage integer: $COVERAGE_INT"
+            exit 1
+          fi
+
+          # Set minimum coverage threshold
+          MIN_COVERAGE=85
+
+          # Check if coverage meets threshold
+          if [ "$COVERAGE_INT" -lt "$MIN_COVERAGE" ]; then
+            echo "FAIL: Coverage $COVERAGE_PERCENT is below minimum threshold of $MIN_COVERAGE%"
+            echo "Please add more tests to improve coverage."
+            exit 1
+          else
+            echo "OK: Coverage $COVERAGE_PERCENT meets minimum threshold of $MIN_COVERAGE%"
+          fi
+      - name: Upload final coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |-
+            luacov.stats.out
+            luacov.report.out
