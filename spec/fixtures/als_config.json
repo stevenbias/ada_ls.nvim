@@ -2,9 +2,6 @@
   "projectFile": "/project/root/my_project.gpr",
   "scenarioVariables": {
     "MODE": "debug",
-    "PLATFORM": "linux"
-  },
-  "defaultCharset": "UTF-8",
-  "relocateBuildTree": "/project/build",
-  "rootDir": "/project/root"
+    "RTS": "light-tasking"
+  }
 }
