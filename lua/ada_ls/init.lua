@@ -56,4 +56,10 @@ function M.setup()
   })
 end
 
+-- Test-specific exports - only exposed in test mode
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._open_qf_on_make = open_qf_on_make
+  M._clear = clear
+end
+
 return M

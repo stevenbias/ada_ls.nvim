@@ -88,4 +88,10 @@ function M.get_obj_dir()
   return lsp_command("als-object-dir")
 end
 
+-- Test-specific exports - only exposed in test mode
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._lsp_request = lsp_request
+  M._lsp_command = lsp_command
+end
+
 return M

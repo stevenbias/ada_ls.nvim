@@ -249,4 +249,16 @@ function M.clear()
   M.is_setup = false
 end
 
+-- Test-specific exports - only exposed in test mode
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._get_abspath = get_abspath
+  M._als_root_dir = als_root_dir
+  M._detect_project_files = detect_project_files
+  M._notify_configuration_change = notify_configuration_change
+  M._save_new_configuration = save_new_configuration
+  M._create_config = create_config
+  M._save_config = save_config
+  M._set_scenario_var = set_scenario_var
+end
+
 return M
