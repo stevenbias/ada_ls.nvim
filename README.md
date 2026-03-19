@@ -25,6 +25,7 @@ Neovim plugin providing Ada Language Server integration: GPR project management,
     "nvim-telescope/telescope.nvim",
     "rcarriga/nvim-notify",  -- optional, for notifications
   },
+  opts = {},
 }
 ```
 

@@ -65,6 +65,7 @@ Using lazy.nvim: >lua
         "rcarriga/nvim-notify",          -- optional
       },
       ft = { "ada" },
+      opts = {},
     }
 <
 
