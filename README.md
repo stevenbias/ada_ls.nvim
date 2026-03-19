@@ -11,8 +11,6 @@ Neovim plugin providing Ada Language Server integration: GPR project management,
 - **Neovim** >= 0.10
 - **[Ada Language Server](https://github.com/AdaCore/ada_language_server)** - Must be configured and running
 - **GNAT** - Must be available in `$PATH`
-- **GNAT Project File** - Only Ada projects using GPR files are supported
-- **gprbuild** - Build tool for GPR projects
 - **[SPARK](https://github.com/AdaCore/spark2014)** - Formal verification tool for Ada (optional)
 
 ## Installation
@@ -36,6 +34,10 @@ Neovim plugin providing Ada Language Server integration: GPR project management,
 Plug 'nvim-telescope/telescope.nvim'
 Plug 'rcarriga/nvim-notify'  " optional
 Plug 'stevenbias/ada_ls.nvim'
+
+lua << EOF
+require("ada_ls").setup()
+EOF
 ```
 
 ## Usage

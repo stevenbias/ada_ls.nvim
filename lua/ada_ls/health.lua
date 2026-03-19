@@ -51,23 +51,22 @@ local function check_project_file()
     return
   end
 
-  local lsp_ok, client = check_lsp_client()
+  local project_file = nil
+  local conf_file = require("ada_ls.utils").get_conf_file()
 
-  if not lsp_ok or client == nil then
-    return
+  if conf_file then
+    vim.health.ok("Configuration file found (.als.json)")
+    project_file = require("ada_ls.project").decode_json_config(conf_file)
+    if project_file then
+      vim.health.ok(string.format("Project file found (%s)", project_file))
+    end
   end
 
-  local project_file = nil
-  if client and client.config.root_dir then
-    local json_file = client.config.root_dir .. "/.als.json"
-    local ok, content = pcall(vim.fn.readfile, json_file)
-    if ok then
-      local json = vim.fn.json_decode(content)
-      if json and json.projectFile then
-        project_file = json.projectFile
-        vim.health.ok(string.format("Project file found (%s)", project_file))
-      end
-    end
+  if not conf_file then
+    vim.health.warn("Configuration file not found", {
+      "Run :Als pick_gpr to select a GPR file",
+      "Or manually create .als.json with projectFile field",
+    })
   end
 
   if not project_file then
@@ -135,8 +134,9 @@ function M.check()
     },
   })
   check_executable("gnatprove", {
+    optional = true,
     advice = {
-      "Install gnatprove (part of GNAT toolchain)",
+      "Install gnatprove",
       "Required for :Spark prove commands",
     },
   })

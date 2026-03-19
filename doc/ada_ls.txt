@@ -59,7 +59,7 @@ INSTALLATION                                          *ada_ls-installation*
 
 Using lazy.nvim: >lua
     {
-      "StevenBias/ada_ls.nvim",
+      "stevenbias/ada_ls.nvim",
       dependencies = {
         "nvim-telescope/telescope.nvim",  -- optional
         "rcarriga/nvim-notify",          -- optional
@@ -71,7 +71,7 @@ Using lazy.nvim: >lua
 Using vim-plug: >vim
     Plug 'nvim-telescope/telescope.nvim'  " optional
     Plug 'rcarriga/nvim-notify'           " optional
-    Plug 'StevenBias/ada_ls.nvim'
+    Plug 'stevenbias/ada_ls.nvim'
 
     lua << EOF
     require("ada_ls").setup()
@@ -269,7 +269,7 @@ SPARK PROOF NOT WORKING ~
 
 FOR MORE HELP ~
 
-- Open an issue: https://github.com/StevenBias/ada_ls.nvim/issues
+- Open an issue: https://github.com/stevenbias/ada_ls.nvim/issues
 - Check Ada Language Server documentation
 
 ================================================================================
@@ -277,7 +277,7 @@ CONTRIBUTING                                          *ada_ls-contributing*
 
 Contributions are welcome! See CONTRIBUTING.md in the repository.
 
-Repository: https://github.com/StevenBias/ada_ls.nvim
+Repository: https://github.com/stevenbias/ada_ls.nvim
 
 ================================================================================
 LICENSE                                                    *ada_ls-license*
