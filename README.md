@@ -80,7 +80,7 @@ vim.keymap.set("n", "<leader>ap", "<cmd>Als edit_gpr<cr>", { desc = "Als edit pr
 vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick gpr" })
 vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als other file" })
 ```
-#### Ada keymaps
+#### Spark keymaps
 ```lua
 vim.keymap.set("n", "<leader>sp", "<cmd>Spark prove<cr>", { desc = "Spark prove" })
 vim.keymap.set("n", "<leader>sf", "<cmd>Spark prove_file<cr>", { desc = "Spark prove file" })
