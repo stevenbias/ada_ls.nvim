@@ -50,6 +50,7 @@ EOF
 
 ### Commands
 
+#### Ada commands
 | Command | Description |
 |---------|-------------|
 | `:Als build` | Build project with gprbuild |
@@ -58,6 +59,10 @@ EOF
 | `:Als edit_gpr` | Open project file |
 | `:Als other` | Go to corresponding .ads/.adb file |
 | `:Als pick_gpr` | Select GPR file via Telescope picker |
+
+#### Spark commands
+| Command | Description |
+|---------|-------------|
 | `:Spark options` | Set proof level and options |
 | `:Spark prove` | Run gnatprove on project |
 | `:Spark prove_file` | Run gnatprove on current file |
@@ -65,6 +70,7 @@ EOF
 
 ### Suggested Keymaps
 
+#### Ada keymaps
 ```lua
 vim.keymap.set("n", "<leader>ab", "<cmd>Als build<cr>", { desc = "Als build" })
 vim.keymap.set("n", "<leader>ac", "<cmd>Als clean<cr>", { desc = "Als clean" })
@@ -72,6 +78,9 @@ vim.keymap.set("n", "<leader>aj", "<cmd>Als config<cr>", { desc = "Als JSON conf
 vim.keymap.set("n", "<leader>ap", "<cmd>Als edit_gpr<cr>", { desc = "Als edit project file" })
 vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick gpr" })
 vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als other file" })
+```
+#### Ada keymaps
+```lua
 vim.keymap.set("n", "<leader>sp", "<cmd>Spark prove<cr>", { desc = "Spark prove" })
 vim.keymap.set("n", "<leader>sf", "<cmd>Spark prove_file<cr>", { desc = "Spark prove file" })
 vim.keymap.set("n", "<leader>sc", "<cmd>Spark clean<cr>", { desc = "Spark clean" })
