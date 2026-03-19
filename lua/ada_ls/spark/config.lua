@@ -73,13 +73,15 @@ local function is_valid(opts)
     end
   end
 
-  for _, key in pairs(opts.options) do
-    if not vim.tbl_contains(valid_options, key) then
-      notify("Unknown SPARK option: " .. key, vim.log.levels.ERROR)
-      return false
+  if opts.options then
+    for _, key in pairs(opts.options) do
+      if not vim.tbl_contains(valid_options, key) then
+        notify("Unknown SPARK option: " .. key, vim.log.levels.ERROR)
+        return false
+      end
     end
+    opts.options = ids_to_opts(opts.options)
   end
-  opts.options = ids_to_opts(opts.options)
 
   if opts.proof_level then
     if type(opts.proof_level) ~= "number" then
@@ -103,6 +105,11 @@ function M.setup(opts)
   if is_valid(opts) then
     M.opts = vim.tbl_deep_extend("force", M.opts, opts or {})
   end
+end
+
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._ids_to_opts = ids_to_opts
+  M._is_valid = is_valid
 end
 
 return M

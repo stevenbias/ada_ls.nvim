@@ -284,6 +284,10 @@ if os.getenv("ADA_LS_TEST_MODE") then
   M._state_to_args = state_to_args
   M._build_args = build_args
   M._populate_quickfix = populate_quickfix
+  M._get_state_file = get_state_file
+  M._get_project_key = get_project_key
+  M._load_state = M.load_state
+  M._save_state = M.save_state
 end
 
 return M
