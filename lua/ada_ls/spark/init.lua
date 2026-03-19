@@ -274,8 +274,8 @@ function M.clean()
 end
 
 function M.setup(opts)
-  if opts then
-    require("ada_ls.spark.config").setup(opts)
+  if opts and opts.spark ~= nil then
+    require("ada_ls.spark.config").setup(opts.spark)
   end
   M.opts = require("ada_ls.spark.config").get()
 end

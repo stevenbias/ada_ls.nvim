@@ -27,7 +27,9 @@ local function clear()
   end
 end
 
-function M.setup()
+function M.setup(opts)
+  require("ada_ls.spark").setup(opts)
+
   vim.api.nvim_create_autocmd("LspAttach", {
     group = group,
     pattern = {
@@ -37,9 +39,6 @@ function M.setup()
       local client = require("ada_ls.utils").get_ada_ls()
       if client ~= nil then
         require("ada_ls.project").setup()
-        require("ada_ls.gpr").makeprg_setup()
-        require("ada_ls.spark.config").setup()
-        require("ada_ls.spark").setup()
         open_qf_on_make()
       end
     end,

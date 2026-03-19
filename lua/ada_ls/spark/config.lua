@@ -48,8 +48,19 @@ local valid_keys = {
 
 local valid_options = {}
 
+local function ids_to_opts(ids)
+  local opts = {}
+
+  for idx, key in ipairs(M.SPARK_OPTIONS) do
+    if vim.tbl_contains(ids, key.id) then
+      table.insert(opts, idx)
+    end
+  end
+  return opts
+end
+
 local function is_valid(opts)
-  if opts == nil then
+  if opts == nil or next(opts) == nil then
     return true
   end
 
@@ -62,12 +73,13 @@ local function is_valid(opts)
     end
   end
 
-  for key in pairs(opts.options) do
+  for _, key in pairs(opts.options) do
     if not vim.tbl_contains(valid_options, key) then
       notify("Unknown SPARK option: " .. key, vim.log.levels.ERROR)
       return false
     end
   end
+  opts.options = ids_to_opts(opts.options)
 
   if opts.proof_level then
     if type(opts.proof_level) ~= "number" then
