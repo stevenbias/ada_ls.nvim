@@ -1,0 +1,69 @@
+name: Pre-release
+
+on:
+  push:
+    tags:
+      - "v*-rc.*"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  pre-release:
+    name: Create Pre-release & PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create GitHub pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            --prerelease
+
+      - name: Open PR from dev to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          PR_BODY=$(cat <<EOF | sed 's/^  //')
+            ## Release: ${TAG_NAME}
+
+            Merging this PR into **main** will trigger the final release workflow which:
+            1. Runs \`cz bump\` to strip the pre-release suffix
+            2. Updates \`CHANGELOG.md\` and \`.cz.yaml\`
+            3. Pushes the final version tag
+            4. Creates a GitHub Release
+            5. Back-merges **main** into **dev**
+
+            > **Pre-release:** [${TAG_NAME}](${REPO_URL}/releases/tag/${TAG_NAME})
+          EOF
+          )
+          # Check if an open PR from dev to main already exists
+          EXISTING_PR=$(gh pr list \
+            --base main \
+            --head dev \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #${EXISTING_PR} already exists — updating to match new pre-release."
+            gh pr edit "$EXISTING_PR" \
+              --title "Release: ${TAG_NAME}" \
+              --body "$PR_BODY"
+          else
+            gh pr create \
+              --base main \
+              --head dev \
+              --title "Release: ${TAG_NAME}" \
+              --body "$PR_BODY"
+          fi
