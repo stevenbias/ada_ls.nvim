@@ -209,7 +209,7 @@ FILES                                                        *ada_ls-files*
 <
 
 ada_ls_spark.json
-    Per-project SPARK settings stored in stdpath("data")/ada_ls/.
+    Per-project SPARK settings stored in stdpath("data").
     Contains proof level and additional options for each project.
 
     Structure: >json
