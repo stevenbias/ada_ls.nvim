@@ -26,8 +26,8 @@ function M.clean()
 end
 
 local function gprbuild_cmd()
-  local conf_file = require("ada_ls.utils").get_conf_file()
   local notify = require("ada_ls.utils").notify
+  local conf_file = require("ada_ls.utils").get_conf_file()
   if conf_file == nil then
     notify("No configuration file found", vim.log.levels.WARN)
     return nil
@@ -48,7 +48,7 @@ function M.makeprg_setup()
     return
   end
   vim.o.makeprg = cmd
-  -- set your gprbuild errorformat once
+
   local err_format = table.concat({
     "%f:%l:%c: %t%*[^:]: %m",
     "%f:%l: %t%*[^:]: %m",
@@ -61,7 +61,6 @@ function M.makeprg_setup()
   vim.o.errorformat = err_format
 end
 
--- Test-specific exports - only exposed in test mode
 if os.getenv("ADA_LS_TEST_MODE") then
   M._gprbuild_cmd = gprbuild_cmd
 end

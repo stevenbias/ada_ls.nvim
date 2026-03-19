@@ -68,6 +68,9 @@ function M.create_vim_fn_mock(overrides)
     getpos = function()
       return { 0, 5, 10 }
     end,
+    filereadable = function()
+      return 1
+    end,
   }
 
   if overrides then
@@ -135,6 +138,9 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
       return path:match("(.*/)")
     end,
     find = stub.new().returns({}),
+    joinpath = function(...)
+      return table.concat({ ... }, "/")
+    end,
   })
 
   -- Set up vim.json

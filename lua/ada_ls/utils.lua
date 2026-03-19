@@ -54,10 +54,15 @@ end
 function M.get_conf_file()
   local root_dir = require("ada_ls.lsp_cmd").get_root_dir()
   if root_dir == nil then
-    return
+    return nil
   end
 
-  return root_dir .. "/.als.json"
+  local conf_file = vim.fs.joinpath(root_dir, ".als.json")
+
+  if vim.fn.filereadable(conf_file) ~= 1 then
+    return nil
+  end
+  return conf_file
 end
 
 function M.notify_server(method, params)
