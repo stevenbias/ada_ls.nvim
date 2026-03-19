@@ -1,0 +1,292 @@
+================================================================================
+Ada Language Server integration for Neovim                            *ada_ls*
+
+Author:  ada_ls.nvim contributors
+License: MIT
+
+================================================================================
+CONTENTS                                                    *ada_ls-contents*
+
+  1. Introduction.........................|ada_ls-introduction|
+  2. Requirements.........................|ada_ls-requirements|
+  3. Dependencies.........................|ada_ls-dependencies|
+  4. Installation.........................|ada_ls-installation|
+  5. Quick Start..........................|ada_ls-quickstart|
+  6. Commands.............................|ada_ls-commands|
+  7. Configuration........................|ada_ls-configuration|
+  8. Files................................|ada_ls-files|
+  9. Troubleshooting.....................|ada_ls-troubleshooting|
+  10. Contributing........................|ada_ls-contributing|
+  11. License.............................|ada_ls-license|
+
+================================================================================
+INTRODUCTION                                          *ada_ls-introduction*
+
+ada_ls.nvim provides Ada Language Server (ALS) integration for Neovim. It
+enhances the Ada development workflow by managing GNAT project files (GPR),
+configuring build tools, and integrating with SPARK formal verification.
+
+Features:
+- Automatic GPR project file management
+- Telescope picker for GPR file selection
+- gprbuild integration via |:make|
+- SPARK formal verification with gnatprove
+- Jump between .ads and .adb files
+
+================================================================================
+REQUIREMENTS                                          *ada_ls-requirements*
+
+- Neovim >= 0.10
+- Ada Language Server (ALS) - configured and running
+- GNAT project file (GPR) for your project
+- GNAT toolchain with gprbuild, gprclean, and gnatprove
+
+================================================================================
+DEPENDENCIES                                          *ada_ls-dependencies*
+
+Optional plugins that enhance the experience:
+
+1. telescope.nvim
+   For GPR file picker (:Als pick_gpr)
+   https://github.com/nvim-telescope/telescope.nvim
+
+2. nvim-notify
+   For enhanced notifications
+   https://github.com/rcarriga/nvim-notify
+
+================================================================================
+INSTALLATION                                          *ada_ls-installation*
+
+Using lazy.nvim: >lua
+    {
+      "StevenBias/ada_ls.nvim",
+      dependencies = {
+        "nvim-telescope/telescope.nvim",  -- optional
+        "rcarriga/nvim-notify",          -- optional
+      },
+      ft = { "ada" },
+    }
+<
+
+Using vim-plug: >vim
+    Plug 'nvim-telescope/telescope.nvim'  " optional
+    Plug 'rcarriga/nvim-notify'           " optional
+    Plug 'StevenBias/ada_ls.nvim'
+
+    lua << EOF
+    require("ada_ls").setup()
+    EOF
+<
+
+================================================================================
+QUICK START                                            *ada_ls-quickstart*
+
+After installation, add to your configuration: >lua
+    require("ada_ls").setup()
+<
+
+Quick start: ~
+
+1. Open an Ada file in your project
+2. Configure Ada Language Server with the correct GPR file: >lua
+       require("ada_ls").setup({
+         -- Configuration options (optional)
+       })
+<
+3. Select a GPR file (optional, if not auto-detected): >
+       :Als pick_gpr
+<
+4. Build your project: >
+       :Als build
+<
+5. For SPARK verification: >
+       :Spark prove
+<
+
+================================================================================
+COMMANDS                                                  *ada_ls-commands*
+
+:Als                                                          *:Als*
+    Main command for Ada Language Server integration. Provides
+    subcommands for project management and building.
+
+:Als build                                                       *:Als-build*
+    Build the project using gprbuild. Uses the current GPR file
+    from .als.json configuration.
+
+:Als clean                                                       *:Als-clean*
+    Clean build artifacts using gprclean -r.
+
+:Als config                                                     *:Als-config*
+    Open the project configuration file (.als.json) for editing.
+
+:Als edit_gpr                                               *:Als-edit_gpr*
+    Open the current GPR project file for editing.
+
+:Als other                                                       *:Als-other*
+    Jump to the corresponding .ads or .adb file using LSP
+    go-to-other-file functionality.
+
+:Als pick_gpr                                               *:Als-pick_gpr*
+    Open a Telescope picker to select a GPR file. Creates or
+    updates .als.json with the selected file.
+
+:Spark                                                          *:Spark*
+    Main command for SPARK formal verification. Provides subcommands
+    for running gnatprove.
+
+:Spark options                                             *:Spark-options*
+    Open a picker to set the proof level and additional options.
+    Options are saved per-project in ada_ls_spark.json.
+
+:Spark prove                                                   *:Spark-prove*
+    Run gnatprove on the entire project to verify formal properties.
+
+:Spark prove_file                                       *:Spark-prove_file*
+    Run gnatprove on the current file only.
+
+:Spark clean                                                   *:Spark-clean*
+    Clean SPARK proof results and intermediate files.
+
+================================================================================
+CONFIGURATION                                      *ada_ls-configuration*
+
+ada_ls.setup({opts})                                        *ada_ls.setup()*
+    Configure the plugin. Uses sensible defaults if called without arguments.
+
+    Parameters: ~
+        {opts} (table|nil)  Optional configuration table.
+
+    Options: ~
+        spark.proof_level (number)
+            Proof level for SPARK verification (0-4).
+            Default: 0
+
+        spark.options (table)
+            Additional SPARK options. Can contain option IDs as strings
+            or indices as numbers.
+            Default: { "multiprocessing" }
+
+    Example configuration: >lua
+        require("ada_ls").setup({
+          spark = {
+            proof_level = 0,
+            options = { "multiprocessing", "report_all" },
+          }
+        })
+<
+
+Proof Levels ~                                                  *ada_ls-levels*
+
+    0       Fast, one prover (default)
+    1       Fast, most provers
+    2       Most provers
+    3       Slower, most provers
+    4       Slowest, most provers
+
+SPARK Options ~                                               *ada_ls-options*
+
+    multiprocessing    Enable multiprocessing (-j0)
+    no_warnings        Disable warnings (--warnings=off)
+    report_all         Report all checks (--report=all)
+    info               Output info messages (--info)
+    proof_warnings     Enable proof warnings (--proof-warnings=on)
+
+================================================================================
+FILES                                                        *ada_ls-files*
+
+.als.json
+    Project configuration file storing the GPR file path and scenario
+    variables. Created in the project root when using :Als pick_gpr or
+    when ALS provides project information.
+
+    Structure: >json
+        {
+          "projectFile": "/path/to/project.gpr",
+          "scenarioVariables": {}
+        }
+<
+
+ada_ls_spark.json
+    Per-project SPARK settings stored in stdpath("data")/ada_ls/.
+    Contains proof level and additional options for each project.
+
+    Structure: >json
+        {
+          "/path/to/project": {
+            "proof_level": 0,
+            "options": [1]
+          }
+        }
+<
+
+================================================================================
+TROUBLESHOOTING                                    *ada_ls-troubleshooting*
+
+RUN HEALTH CHECK ~
+                                                     *ada_ls-checkhealth*
+
+Verify your installation and configuration: >
+    :checkhealth ada_ls
+<
+
+This will check:
+- Neovim version compatibility
+- External tools (gprbuild, gprclean, gnatprove)
+- Ada Language Server status
+- Configuration validity
+- Project detection status
+- Plugin loaded status
+
+PLUGIN NOT WORKING ~
+
+1. Run health check first: >
+       :checkhealth ada_ls
+<
+2. Check Ada Language Server is running: >
+       :checkhealth vim.lsp
+<
+3. Verify project file is configured: >
+       :Als config
+<
+4. Ensure you're in an Ada project with a GPR file
+
+NO GPR FILE DETECTED ~
+
+1. Check .als.json exists in project root
+2. Run :Als pick_gpr to select a GPR file
+3. Or manually create .als.json with projectFile field
+
+SPARK PROOF NOT WORKING ~
+
+1. Verify gnatprove is installed: >
+       gnatprove --version
+<
+2. Check SPARK options: >
+       :Spark options
+<
+3. Ensure your project is SPARK-compatible
+
+FOR MORE HELP ~
+
+- Open an issue: https://github.com/StevenBias/ada_ls.nvim/issues
+- Check Ada Language Server documentation
+
+================================================================================
+CONTRIBUTING                                          *ada_ls-contributing*
+
+Contributions are welcome! See CONTRIBUTING.md in the repository.
+
+Repository: https://github.com/StevenBias/ada_ls.nvim
+
+================================================================================
+LICENSE                                                    *ada_ls-license*
+
+MIT License
+
+Copyright (c) ada_ls.nvim contributors
+
+See LICENSE file in the repository for full license text.
+
+================================================================================
+ vim:tw=78:ts=8:ft=help:norl:
