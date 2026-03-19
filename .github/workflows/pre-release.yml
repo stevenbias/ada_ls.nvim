@@ -34,17 +34,19 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          PR_BODY="## Release: ${TAG_NAME}
+          PR_BODY=$(cat <<EOF | sed 's/^  //')
+            ## Release: ${TAG_NAME}
 
-          Merging this PR into **main** will trigger the final release workflow which:
-          1. Runs \`cz bump\` to strip the pre-release suffix
-          2. Updates \`CHANGELOG.md\` and \`.cz.yaml\`
-          3. Pushes the final version tag
-          4. Creates a GitHub Release
-          5. Back-merges **main** into **dev**
+            Merging this PR into **main** will trigger the final release workflow which:
+            1. Runs \`cz bump\` to strip the pre-release suffix
+            2. Updates \`CHANGELOG.md\` and \`.cz.yaml\`
+            3. Pushes the final version tag
+            4. Creates a GitHub Release
+            5. Back-merges **main** into **dev**
 
-          > **Pre-release:** [${TAG_NAME}](${REPO_URL}/releases/tag/${TAG_NAME})"
-
+            > **Pre-release:** [${TAG_NAME}](${REPO_URL}/releases/tag/${TAG_NAME})
+          EOF
+          )
           # Check if an open PR from dev to main already exists
           EXISTING_PR=$(gh pr list \
             --base main \
