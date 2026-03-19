@@ -3,13 +3,13 @@ rockspec_format = "3.0"
 package = "ada_ls"
 version = "scm-1"
 source = {
-  url = "https://github.com/stevenbias/als.nvim.git",
+  url = "https://github.com/stevenbias/ada_ls.nvim.git",
 }
 description = {
   summary = "Neovim plugin for Ada Language Server integration",
   detailed = "Manages .gpr project files, configures gprbuild as :make, "
     .. "offers a Telescope picker for GPR files, and exposes LSP commands.",
-  homepage = "https://github.com/stevenbias/als.nvim",
+  homepage = "https://github.com/stevenbias/ada_ls.nvim",
   license = "MIT",
 }
 dependencies = {
