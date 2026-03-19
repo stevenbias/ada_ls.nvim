@@ -5,6 +5,7 @@ read_globals = {
 globals = {
   "vim.o",
   "vim.g",
+  "vim.bo",
 }
 
 -- Spec files need to mock vim APIs
