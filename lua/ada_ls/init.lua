@@ -38,6 +38,8 @@ function M.setup()
       if client ~= nil then
         require("ada_ls.project").setup()
         require("ada_ls.gpr").makeprg_setup()
+        require("ada_ls.spark.config").setup()
+        require("ada_ls.spark").setup()
         open_qf_on_make()
       end
     end,
