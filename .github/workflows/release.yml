@@ -40,7 +40,7 @@ jobs:
           echo "Bumped to: ${NEW_TAG}"
       - name: Push changes and tag to main
         run: |
-          git push origin main --follow-tags
+          git push origin main --tags
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
