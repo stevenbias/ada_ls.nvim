@@ -1,0 +1,90 @@
+name: Release
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  release:
+    name: Create Release
+    if: >-
+      github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'dev'
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Install commitizen
+        run: pip install commitizen
+      - name: Bump to final version
+        id: bump
+        run: |
+          # cz bump strips the pre-release suffix and produces the final tag
+          # e.g. v0.1.0-rc.0 → v0.1.0
+          cz bump --yes 2>&1 | tee /tmp/cz-bump.log
+
+          # Capture the new version tag
+          VERSION="$(cz version --project)"
+          NEW_TAG="v${VERSION}"
+          echo "new_tag=${NEW_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Bumped to: ${NEW_TAG}"
+      - name: Push changes and tag to main
+        run: |
+          git push origin main --tags
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.bump.outputs.new_tag }}" \
+            --title "${{ steps.bump.outputs.new_tag }}" \
+            --generate-notes \
+            --latest
+      - name: Back-merge main into dev
+        run: |
+          git fetch origin dev
+          git checkout dev
+          git merge main --no-edit
+          git push origin dev
+  luarocks-publish:
+    name: Publish to LuaRocks
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.new_tag }}
+      - name: LuaRocks Upload
+        uses: nvim-neorocks/luarocks-tag-release@v7
+        env:
+          LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
+        with:
+          version: ${{ needs.release.outputs.new_tag }}
+          name: ada_ls
+          dependencies: |
+            lua >= 5.1
+          test_dependencies: |
+            busted
+            nlua
+          copy_directories: |
+            {{ neovim.plugin.dirs }}
+          labels: |
+            neovim
+            ada
+            lsp
+            spark
+          summary: "Neovim plugin for Ada Language Server integration"
+          detailed_description: |
+            Manages .gpr project files, configures gprbuild as :make,
+            offers a Telescope picker for GPR files, and exposes LSP commands.
+          license: "MIT"

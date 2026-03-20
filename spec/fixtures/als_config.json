@@ -1,0 +1,7 @@
+{
+  "projectFile": "/project/root/my_project.gpr",
+  "scenarioVariables": {
+    "MODE": "debug",
+    "RTS": "light-tasking"
+  }
+}
