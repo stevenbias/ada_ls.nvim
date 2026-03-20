@@ -1,19 +1,15 @@
 name: Release
-
 on:
   pull_request:
     types: [closed]
     branches: [main]
-
 permissions:
   contents: write
-
 jobs:
   release:
     name: Create Release
     if: >-
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.head.ref == 'dev'
+      github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'dev'
     runs-on: ubuntu-latest
     outputs:
       new_tag: ${{ steps.bump.outputs.new_tag }}
@@ -24,15 +20,12 @@ jobs:
           ref: main
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
       - name: Install commitizen
         run: pip install commitizen
-
       - name: Bump to final version
         id: bump
         run: |
@@ -41,14 +34,13 @@ jobs:
           cz bump --yes 2>&1 | tee /tmp/cz-bump.log
 
           # Capture the new version tag
-          NEW_TAG=$(git describe --tags --abbrev=0)
+          VERSION="$(cz version --project)"
+          NEW_TAG="v${VERSION}"
           echo "new_tag=${NEW_TAG}" >> "$GITHUB_OUTPUT"
           echo "Bumped to: ${NEW_TAG}"
-
       - name: Push changes and tag to main
         run: |
           git push origin main --follow-tags
-
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,14 +49,12 @@ jobs:
             --title "${{ steps.bump.outputs.new_tag }}" \
             --generate-notes \
             --latest
-
       - name: Back-merge main into dev
         run: |
           git fetch origin dev
           git checkout dev
           git merge main --no-edit
           git push origin dev
-
   luarocks-publish:
     name: Publish to LuaRocks
     needs: release
