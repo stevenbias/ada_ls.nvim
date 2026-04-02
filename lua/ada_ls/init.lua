@@ -38,6 +38,31 @@ local function on_als_detach()
   clear()
 end
 
+local function als_handlers()
+  local original_apply_edit = vim.lsp.handlers["workspace/applyEdit"]
+  vim.lsp.handlers["workspace/applyEdit"] = function(err, result, ctx, config)
+    local response = original_apply_edit(err, result, ctx, config)
+
+    if result and result.edit and result.edit.documentChanges then
+      for _, change in ipairs(result.edit.documentChanges) do
+        if change.kind == "create" then
+          vim.schedule(function()
+            local client = vim.lsp.get_client_by_id(ctx.client_id)
+            if client == nil then
+              return
+            end
+            client.stop(client, true)
+            vim.cmd.edit()
+            vim.cmd.edit(vim.fn.fnameescape(vim.uri_to_fname(change.uri)))
+          end)
+        end
+      end
+    end
+
+    return response
+  end
+end
+
 function M.setup(opts)
   require("ada_ls.spark").setup(opts)
 
@@ -46,6 +71,7 @@ function M.setup(opts)
     filetypes = { "ada" },
     on_attach = on_als_attach,
     on_detach = on_als_detach,
+    handlers = als_handlers(),
     root_dir = function(bufnr, on_dir)
       on_dir(
         vim.fs.root(
