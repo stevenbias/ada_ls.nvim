@@ -27,6 +27,29 @@ local function clear()
   end
 end
 
+local function als_capabilities()
+  local capabilities = vim.lsp.protocol.make_client_capabilities()
+
+  -- From: https://github.com/romgrk/fzy-lua-native/blob/master/lua/init.lua
+  local dirname =
+    string.sub(debug.getinfo(1).source, 2, string.len("/init.lua") * -1)
+
+  local file = io.open(dirname .. "vscode_capabilities.json", "r")
+  if not file then
+    return capabilities
+  end
+  local raw = file:read("*a")
+  file:close()
+
+  local ok, json_capabilities = pcall(vim.json.decode, raw)
+  if not ok then
+    return capabilities
+  end
+
+  capabilities = vim.tbl_deep_extend("force", json_capabilities, capabilities)
+  return capabilities
+end
+
 local function on_als_attach()
   print("Attach")
   require("ada_ls.project").setup()
@@ -69,6 +92,7 @@ function M.setup(opts)
   vim.lsp.config("ada", {
     cmd = { "ada_language_server" },
     filetypes = { "ada" },
+    capabilities = als_capabilities(),
     on_attach = on_als_attach,
     on_detach = on_als_detach,
     handlers = als_handlers(),
