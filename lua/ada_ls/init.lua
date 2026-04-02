@@ -27,32 +27,32 @@ local function clear()
   end
 end
 
+local function on_als_attach()
+  print("Attach")
+  require("ada_ls.project").setup()
+  open_qf_on_make()
+  vim.g.loaded_ada_ls = true
+end
+
+local function on_als_detach()
+  clear()
+end
+
 function M.setup(opts)
   require("ada_ls.spark").setup(opts)
 
-  vim.api.nvim_create_autocmd("LspAttach", {
-    group = group,
-    pattern = {
-      "*.ad[bs]",
-    },
-    callback = function()
-      local client = require("ada_ls.utils").get_ada_ls()
-      if client ~= nil then
-        require("ada_ls.project").setup()
-        open_qf_on_make()
-      end
-    end,
-  })
-  vim.api.nvim_create_autocmd("LspDetach", {
-    group = group,
-    pattern = {
-      "*.ad[bs]",
-    },
-    callback = function(args)
-      local client = vim.lsp.get_client_by_id(args.data.client_id)
-      if client and client.name == "ada" then
-        clear()
-      end
+  vim.lsp.config("ada", {
+    cmd = { "ada_language_server" },
+    filetypes = { "ada" },
+    on_attach = on_als_attach,
+    on_detach = on_als_detach,
+    root_dir = function(bufnr, on_dir)
+      on_dir(
+        vim.fs.root(
+          bufnr,
+          { ".als.json", "Makefile", ".git", "alire.toml", "*.gpr", "*.adc" }
+        )
+      )
     end,
   })
 end
