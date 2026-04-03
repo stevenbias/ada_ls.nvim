@@ -110,6 +110,7 @@ function M.setup(opts)
       )
     end,
   })
+  vim.lsp.enable("ada_ls")
 end
 
 -- Test-specific exports - only exposed in test mode
