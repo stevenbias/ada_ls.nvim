@@ -180,7 +180,7 @@ end
 -- LSP client mocking
 function M.create_lsp_client(overrides)
   local base_client = {
-    name = "ada",
+    name = "ada_ls",
     root_dir = "/project/root",
     offset_encoding = "utf-8",
     request_sync = stub.new().returns(nil),

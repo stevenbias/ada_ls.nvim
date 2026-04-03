@@ -94,7 +94,7 @@ function M.setup(opts)
   als_snippets()
   require("ada_ls.spark").setup(opts)
 
-  vim.lsp.config("ada", {
+  vim.lsp.config("ada_ls", {
     cmd = { "ada_language_server" },
     filetypes = { "ada" },
     capabilities = als_capabilities(),
@@ -105,7 +105,7 @@ function M.setup(opts)
       on_dir(
         vim.fs.root(
           bufnr,
-          { ".als.json", "Makefile", ".git", "alire.toml", "*.gpr", "*.adc" }
+          { ".als.json", "alire.toml", "Makefile", ".git", "*.gpr", "*.adc" }
         )
       )
     end,
