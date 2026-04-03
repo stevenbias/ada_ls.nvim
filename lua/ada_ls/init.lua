@@ -51,7 +51,6 @@ local function als_capabilities()
 end
 
 local function on_als_attach()
-  print("Attach")
   require("ada_ls.project").setup()
   open_qf_on_make()
   vim.g.loaded_ada_ls = true
@@ -81,7 +80,18 @@ local function als_handlers()
   end
 end
 
+local function als_snippets()
+  if require("ada_ls.utils").try_require("luasnip") then
+    local dirname =
+      string.sub(debug.getinfo(1).source, 2, string.len("/init.lua") * -1)
+    require("luasnip.loaders.from_vscode").lazy_load({
+      paths = { dirname .. "snippets" },
+    })
+  end
+end
+
 function M.setup(opts)
+  als_snippets()
   require("ada_ls.spark").setup(opts)
 
   vim.lsp.config("ada", {
