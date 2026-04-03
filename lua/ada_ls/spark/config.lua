@@ -48,6 +48,12 @@ local valid_keys = {
 
 local valid_options = {}
 
+local function opts_to_ids(opts)
+  if opts <= #M.SPARK_OPTIONS then
+    return M.SPARK_OPTIONS[opts].id
+  end
+end
+
 local function ids_to_opts(ids)
   local opts = {}
 
@@ -75,6 +81,9 @@ local function is_valid(opts)
 
   if opts.options then
     for _, key in pairs(opts.options) do
+      if type(key) == "number" then
+        key = opts_to_ids(key)
+      end
       if not vim.tbl_contains(valid_options, key) then
         notify("Unknown SPARK option: " .. key, vim.log.levels.ERROR)
         return false
