@@ -69,14 +69,9 @@ local function als_handlers()
     if result and result.edit and result.edit.documentChanges then
       for _, change in ipairs(result.edit.documentChanges) do
         if change.kind == "create" then
+          require("ada_ls.utils").reset_als_client()
           vim.schedule(function()
-            local client = vim.lsp.get_client_by_id(ctx.client_id)
-            if client == nil then
-              return
-            end
-            client.stop(client, true)
-            vim.cmd.edit()
-            vim.cmd.edit(vim.fn.fnameescape(vim.uri_to_fname(change.uri)))
+            vim.cmd.edit(vim.uri_to_fname(change.uri))
           end)
         end
       end

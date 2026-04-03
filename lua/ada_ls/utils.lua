@@ -78,9 +78,7 @@ function M.reset_als_client()
   for _, client in pairs(vim.lsp.get_clients({ name = "ada" })) do
     client.stop(client, true)
   end
-  vim.defer_fn(function()
-    vim.cmd("e") -- Reopen buffer to trigger LSP attach
-  end, 100)
+  vim.cmd("e") -- Reopen buffer to trigger LSP attach
 end
 
 function M.clear()
