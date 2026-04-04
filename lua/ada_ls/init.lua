@@ -87,6 +87,12 @@ local function als_handlers()
           filename = vim.uri_to_fname(change.uri)
           vim.schedule(function()
             vim.cmd.edit(filename)
+            -- Fix last empty line that provokes bug on updating package body
+            if vim.fn.getline("$") == "" then
+              vim.cmd.normal("G")
+              vim.cmd.normal("dd")
+              vim.cmd.normal("gg")
+            end
           end)
         elseif change.textDocument and filename == "" then
           vim.schedule(function()
