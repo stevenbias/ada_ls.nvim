@@ -126,7 +126,6 @@ function M.setup(opts)
     filetypes = { "ada" },
     capabilities = als_capabilities(),
     on_attach = on_als_attach,
-    on_detach = on_als_detach,
     handlers = als_handlers(),
     root_dir = function(bufnr, on_dir)
       on_dir(
@@ -137,6 +136,13 @@ function M.setup(opts)
       )
     end,
   })
+
+  vim.api.nvim_create_autocmd("LspDetach", {
+    group = group,
+    pattern = { "*.ad[bs]" },
+    callback = on_als_detach,
+  })
+
   vim.lsp.enable("ada_ls")
 end
 

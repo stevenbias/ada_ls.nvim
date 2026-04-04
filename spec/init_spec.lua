@@ -38,12 +38,27 @@ describe("ada_ls.init", function()
   end
 
   describe("setup", function()
-    it("configures ada_ls with on_attach and on_detach callbacks", function()
+    it("configures ada_ls with on_attach callback", function()
       local config = call_setup_and_get_config()
 
       assert.equals("ada_ls", vim.lsp.config.calls[1].vals[1])
       assert.is_function(config.on_attach)
-      assert.is_function(config.on_detach)
+    end)
+
+    it("creates LspDetach autocmd for Ada files", function()
+      ada_ls.setup()
+
+      local found_detach = false
+      for _, call in ipairs(vim.api.nvim_create_autocmd.calls) do
+        if call.vals[1] == "LspDetach" then
+          found_detach = true
+          local opts = call.vals[2]
+          assert.is_function(opts.callback)
+          assert.same({ "*.ad[bs]" }, opts.pattern)
+          break
+        end
+      end
+      assert.is_true(found_detach)
     end)
 
     it("enables the ada_ls LSP client", function()
