@@ -71,6 +71,9 @@ function M.create_vim_fn_mock(overrides)
     filereadable = function()
       return 1
     end,
+    isdirectory = function()
+      return 0
+    end,
   }
 
   if overrides then

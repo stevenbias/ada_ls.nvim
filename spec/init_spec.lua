@@ -1,4 +1,5 @@
 -- Tests for lua/ada_ls/init.lua
+local stub = require("luassert.stub")
 local common = require("spec.helpers.common")
 
 describe("ada_ls.init", function()
@@ -7,6 +8,13 @@ describe("ada_ls.init", function()
   before_each(function()
     common.cleanup_packages()
     common.setup_vim_globals()
+    -- Add mocks for vim.lsp fields used by init.setup()
+    vim.lsp.protocol = {
+      make_client_capabilities = stub.new().returns({}),
+    }
+    vim.lsp.config = stub.new()
+    vim.lsp.enable = stub.new()
+    vim.lsp.handlers = {}
     ada_ls = require("ada_ls")
   end)
 
@@ -15,49 +23,34 @@ describe("ada_ls.init", function()
   end)
 
   describe("setup", function()
-    it("creates LspAttach autocmd for Ada files", function()
+    it("configures ada_ls with on_attach callback", function()
       ada_ls.setup()
 
-      assert.stub(vim.api.nvim_create_autocmd).was_called()
+      assert.stub(vim.lsp.config).was_called()
 
-      -- Find the LspAttach call
-      local found_attach = false
-      for _, call in ipairs(vim.api.nvim_create_autocmd.calls) do
-        if call.vals[1] == "LspAttach" then
-          found_attach = true
-          local opts = call.vals[2]
-          assert.is_table(opts.pattern)
-          -- Should include Ada file patterns
-          local has_ada_pattern = false
-          for _, p in ipairs(opts.pattern) do
-            if p:match("%.ad%[bs%]") then
-              has_ada_pattern = true
-              break
-            end
-          end
-          assert.is_true(has_ada_pattern)
-          break
-        end
-      end
-      assert.is_true(found_attach)
+      -- Extract the config table passed to vim.lsp.config
+      local call_args = vim.lsp.config.calls[1].vals
+      assert.equals("ada_ls", call_args[1])
+      local config = call_args[2]
+      assert.is_table(config)
+      assert.is_function(config.on_attach)
     end)
 
-    it("creates LspDetach autocmd for Ada files", function()
+    it("configures ada_ls with on_detach callback", function()
       ada_ls.setup()
 
-      assert.stub(vim.api.nvim_create_autocmd).was_called()
+      assert.stub(vim.lsp.config).was_called()
 
-      -- Find the LspDetach call
-      local found_detach = false
-      for _, call in ipairs(vim.api.nvim_create_autocmd.calls) do
-        if call.vals[1] == "LspDetach" then
-          found_detach = true
-          local opts = call.vals[2]
-          assert.is_table(opts.pattern)
-          break
-        end
-      end
-      assert.is_true(found_detach)
+      local call_args = vim.lsp.config.calls[1].vals
+      local config = call_args[2]
+      assert.is_table(config)
+      assert.is_function(config.on_detach)
+    end)
+
+    it("enables the ada_ls LSP client", function()
+      ada_ls.setup()
+
+      assert.stub(vim.lsp.enable).was_called_with("ada_ls")
     end)
   end)
 
