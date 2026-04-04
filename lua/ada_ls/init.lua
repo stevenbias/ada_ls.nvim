@@ -62,8 +62,22 @@ end
 
 local function als_handlers()
   local original_apply_edit = vim.lsp.handlers["workspace/applyEdit"]
+
   vim.lsp.handlers["workspace/applyEdit"] = function(err, result, ctx, config)
-    local response = original_apply_edit(err, result, ctx, config)
+    -- ALS sends AnnotatedTextEdit without the required changeAnnotations
+    -- map, causing Neovim >= 0.12 to fail. Remove the capability so ALS
+    -- sends plain TextEdit instead.
+    if result and result.edit and not result.edit.changeAnnotations then
+      if result.edit.documentChanges then
+        for _, change in ipairs(result.edit.documentChanges) do
+          if change.edits then
+            for _, text_edits in ipairs(change.edits) do
+              text_edits.annotationId = nil
+            end
+          end
+        end
+      end
+    end
 
     if result and result.edit and result.edit.documentChanges then
       for _, change in ipairs(result.edit.documentChanges) do
@@ -76,6 +90,7 @@ local function als_handlers()
       end
     end
 
+    local response = original_apply_edit(err, result, ctx, config)
     return response
   end
 end
