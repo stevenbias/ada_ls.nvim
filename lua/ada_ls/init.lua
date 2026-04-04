@@ -80,11 +80,17 @@ local function als_handlers()
     end
 
     if result and result.edit and result.edit.documentChanges then
+      local filename = ""
       for _, change in ipairs(result.edit.documentChanges) do
         if change.kind == "create" then
           require("ada_ls.utils").reset_als_client()
+          filename = vim.uri_to_fname(change.uri)
           vim.schedule(function()
-            vim.cmd.edit(vim.uri_to_fname(change.uri))
+            vim.cmd.edit(filename)
+          end)
+        elseif change.textDocument and filename == "" then
+          vim.schedule(function()
+            vim.cmd.edit(vim.uri_to_fname(change.textDocument.uri))
           end)
         end
       end
