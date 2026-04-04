@@ -144,6 +144,11 @@ end
 if os.getenv("ADA_LS_TEST_MODE") then
   M._open_qf_on_make = open_qf_on_make
   M._clear = clear
+  M._on_als_attach = on_als_attach
+  M._on_als_detach = on_als_detach
+  M._als_handlers = als_handlers
+  M._als_capabilities = als_capabilities
+  M._als_snippets = als_snippets
 end
 
 return M
