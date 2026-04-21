@@ -1,6 +1,6 @@
 local M = {}
 
-local function lsp_request(req)
+function M.send_request(req)
   local utils = require("ada_ls.utils")
   local client = utils.get_ada_ls()
   if not client then
@@ -17,7 +17,7 @@ local function lsp_request(req)
   return vim.islist(result.result) and result.result or { result.result }
 end
 
-local function lsp_command(cmd, args)
+function M.send_command(cmd, args)
   local utils = require("ada_ls.utils")
   local client = utils.get_ada_ls()
   if not client then
@@ -48,15 +48,15 @@ function M.get_root_dir()
 end
 
 function M.get_symbols()
-  return lsp_request("textDocument/documentSymbol")
+  return M.send_request("textDocument/documentSymbol")
 end
 
 function M.get_declarations()
-  return lsp_request("textDocument/declaration")
+  return M.send_request("textDocument/declaration")
 end
 
 function M.get_prj_file()
-  local prj_file = lsp_command("als-project-file")
+  local prj_file = M.send_command("als-project-file")
   if not prj_file or #prj_file == 0 then
     return nil, "No project file found"
   end
@@ -72,26 +72,20 @@ function M.get_prj_dependencies()
     uri = prj_file,
     direction = 1,
   }
-  return lsp_command("als-gpr-dependencies", arg)
+  return M.send_command("als-gpr-dependencies", arg)
 end
 
 function M.go_to_other()
   local arg = { uri = vim.uri_from_bufnr(0) }
-  return lsp_command("als-other-file", arg)
+  return M.send_command("als-other-file", arg)
 end
 
 function M.get_src_dirs()
-  return lsp_command("als-source-dirs")
+  return M.send_command("als-source-dirs")
 end
 
 function M.get_obj_dir()
-  return lsp_command("als-object-dir")
-end
-
--- Test-specific exports - only exposed in test mode
-if os.getenv("ADA_LS_TEST_MODE") then
-  M._lsp_request = lsp_request
-  M._lsp_command = lsp_command
+  return M.send_command("als-object-dir")
 end
 
 return M

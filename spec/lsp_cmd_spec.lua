@@ -183,74 +183,71 @@ describe("ada_ls.lsp_cmd", function()
     end)
   end)
 
-  -- Private function tests - only run in test mode
-  if os.getenv("ADA_LS_TEST_MODE") then
-    describe("_lsp_request", function()
-      it("returns nil and error when no Ada LSP client", function()
-        vim.lsp.get_clients = stub.new().returns({})
+  describe("send_request", function()
+    it("returns nil and error when no Ada LSP client", function()
+      vim.lsp.get_clients = stub.new().returns({})
 
-        local result, err = lsp_cmd._lsp_request("textDocument/documentSymbol")
-        assert.is_nil(result)
-        assert.equals("Ada LSP client not found", err)
-      end)
-
-      it("returns result as list for successful request", function()
-        local mock_client = common.create_lsp_client({
-          request_sync = stub
-            .new()
-            .returns(create_lsp_result({ "symbol1", "symbol2" })),
-        })
-        common.setup_lsp_client(mock_client)
-
-        local result, err = lsp_cmd._lsp_request("textDocument/documentSymbol")
-        assert.is_nil(err)
-        assert.same({ "symbol1", "symbol2" }, result)
-      end)
-
-      it("returns error when request fails", function()
-        local mock_client = common.create_lsp_client({
-          request_sync = stub.new().returns(nil, "Request timed out"),
-        })
-        common.setup_lsp_client(mock_client)
-
-        local result, err = lsp_cmd._lsp_request("textDocument/documentSymbol")
-        assert.is_nil(result)
-        assert.equals("Request timed out", err)
-      end)
+      local result, err = lsp_cmd.send_request("textDocument/documentSymbol")
+      assert.is_nil(result)
+      assert.equals("Ada LSP client not found", err)
     end)
 
-    describe("_lsp_command", function()
-      it("returns nil and error when no Ada LSP client", function()
-        vim.lsp.get_clients = stub.new().returns({})
+    it("returns result as list for successful request", function()
+      local mock_client = common.create_lsp_client({
+        request_sync = stub
+          .new()
+          .returns(create_lsp_result({ "symbol1", "symbol2" })),
+      })
+      common.setup_lsp_client(mock_client)
 
-        local result, err = lsp_cmd._lsp_command("als-project-file")
-        assert.is_nil(result)
-        assert.equals("Ada LSP client not found", err)
-      end)
-
-      it("returns result for successful command", function()
-        local mock_client = common.create_lsp_client({
-          request_sync = stub
-            .new()
-            .returns(create_lsp_result("/path/to/project.gpr")),
-        })
-        common.setup_lsp_client(mock_client)
-
-        local result, err = lsp_cmd._lsp_command("als-project-file")
-        assert.is_nil(err)
-        assert.same({ "/path/to/project.gpr" }, result)
-      end)
-
-      it("returns error when command fails", function()
-        local mock_client = common.create_lsp_client({
-          request_sync = stub.new().returns(nil, "Command not found"),
-        })
-        common.setup_lsp_client(mock_client)
-
-        local result, err = lsp_cmd._lsp_command("als-invalid-command")
-        assert.is_nil(result)
-        assert.equals("Command not found", err)
-      end)
+      local result, err = lsp_cmd.send_request("textDocument/documentSymbol")
+      assert.is_nil(err)
+      assert.same({ "symbol1", "symbol2" }, result)
     end)
-  end
+
+    it("returns error when request fails", function()
+      local mock_client = common.create_lsp_client({
+        request_sync = stub.new().returns(nil, "Request timed out"),
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.send_request("textDocument/documentSymbol")
+      assert.is_nil(result)
+      assert.equals("Request timed out", err)
+    end)
+  end)
+
+  describe("send_command", function()
+    it("returns nil and error when no Ada LSP client", function()
+      vim.lsp.get_clients = stub.new().returns({})
+
+      local result, err = lsp_cmd.send_command("als-project-file")
+      assert.is_nil(result)
+      assert.equals("Ada LSP client not found", err)
+    end)
+
+    it("returns result for successful command", function()
+      local mock_client = common.create_lsp_client({
+        request_sync = stub
+          .new()
+          .returns(create_lsp_result("/path/to/project.gpr")),
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.send_command("als-project-file")
+      assert.is_nil(err)
+      assert.same({ "/path/to/project.gpr" }, result)
+    end)
+
+    it("returns error when command fails", function()
+      local mock_client = common.create_lsp_client({
+        request_sync = stub.new().returns(nil, "Command not found"),
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.send_command("als-invalid-command")
+      assert.is_nil(result)
+      assert.equals("Command not found", err)
+    end)
+  end)
 end)
