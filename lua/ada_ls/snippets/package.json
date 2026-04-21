@@ -1,0 +1,9 @@
+{
+  "name": "ada_ls.nvim",
+  "contributes": {
+    "snippets": [
+      { "language": "ada", "path": "./ada-snippets.json" },
+      { "language": "gpr", "path": "./gpr-snippets.json" }
+    ]
+  }
+}

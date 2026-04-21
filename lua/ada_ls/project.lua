@@ -38,18 +38,21 @@ local function notify_configuration_change(config)
 end
 
 local function save_new_configuration(root_dir, config)
-  local path = vim.fs.joinpath(root_dir, ".als.json")
+  local json_path = vim.fs.joinpath(root_dir, ".als.json")
 
-  local file = io.open(path, "w+")
+  local file = io.open(json_path, "w+")
   if not file then
     vim.notify_once(
-      "Could not save Ada_ls configuration at " .. path,
+      "Could not save Ada_ls configuration at " .. json_path,
       vim.log.levels.ERROR
     )
     return
   end
+
   file:write(vim.json.encode(config))
   file:close()
+
+  require("ada_ls.gpr").makeprg_setup()
 end
 
 local function set_scenario_var()
@@ -114,8 +117,6 @@ local function save_config()
 
   create_config(config)
   save_new_configuration(project_file_path, config)
-
-  require("ada_ls.utils").reset_als_client()
 end
 
 local function detect_project_files(root_dir)
@@ -213,22 +214,27 @@ function M.setup()
 
   local utils = require("ada_ls.utils")
 
-  if utils.get_ada_ls() == nil then
-    return
-  end
-
   local ada_ls_conf_path = als_root_dir(get_abspath(utils.get_bufpath()))
 
-  local path = vim.fs.joinpath(ada_ls_conf_path, ".als.json")
+  local json_path = vim.fs.joinpath(ada_ls_conf_path, ".als.json")
 
-  if vim.fn.filereadable(path) ~= 1 then
+  local group = vim.api.nvim_create_augroup("config_file", { clear = true })
+  vim.api.nvim_create_autocmd("BufWritePost", {
+    group = group,
+    pattern = json_path,
+    callback = function()
+      require("ada_ls.gpr").makeprg_setup()
+    end,
+  })
+
+  if vim.fn.filereadable(json_path) ~= 1 then
     return
   end
 
-  local _, _, json_config = M.decode_json_config(path)
+  local _, _, json_config = M.decode_json_config(json_path)
   if not json_config then
     utils.notify(
-      "Failed to decode Ada LSP configuration from " .. path,
+      "Failed to decode Ada LSP configuration from " .. json_path,
       vim.log.levels.ERROR
     )
     return

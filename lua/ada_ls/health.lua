@@ -25,7 +25,7 @@ local function check_executable(cmd, opts)
 end
 
 local function check_lsp_client()
-  local clients = vim.lsp.get_clients({ name = "ada" })
+  local clients = vim.lsp.get_clients({ name = "ada_ls" })
 
   if #clients > 0 then
     local client = clients[1]

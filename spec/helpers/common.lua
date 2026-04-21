@@ -13,6 +13,7 @@ function M.cleanup_packages()
   package.preload["ada_ls.gpr"] = nil
   package.preload["ada_ls.spark"] = nil
   package.preload["ada_ls.spark.config"] = nil
+  package.preload["ada_ls.lspconfig"] = nil
   -- Then clear loaded modules
   package.loaded["ada_ls"] = nil
   package.loaded["ada_ls.utils"] = nil
@@ -21,6 +22,7 @@ function M.cleanup_packages()
   package.loaded["ada_ls.gpr"] = nil
   package.loaded["ada_ls.spark"] = nil
   package.loaded["ada_ls.spark.config"] = nil
+  package.loaded["ada_ls.lspconfig"] = nil
 end
 
 -- Vim API mocking
@@ -70,6 +72,9 @@ function M.create_vim_fn_mock(overrides)
     end,
     filereadable = function()
       return 1
+    end,
+    isdirectory = function()
+      return 0
     end,
   }
 
@@ -180,7 +185,7 @@ end
 -- LSP client mocking
 function M.create_lsp_client(overrides)
   local base_client = {
-    name = "ada",
+    name = "ada_ls",
     root_dir = "/project/root",
     offset_encoding = "utf-8",
     request_sync = stub.new().returns(nil),
