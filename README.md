@@ -2,14 +2,29 @@
 
 [![CI](https://github.com/stevenbias/ada_ls.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/stevenbias/ada_ls.nvim/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Neovim](https://img.shields.io/badge/Neovim-0.10+-green.svg)](https://neovim.io)
+[![Neovim](https://img.shields.io/badge/Neovim-0.11+-green.svg)](https://neovim.io)
 
-Neovim plugin providing Ada Language Server integration: GPR project management, build commands, and SPARK formal verification.
+Neovim plugin providing out-of-the-box Ada Language Server integration: GPR
+project management, build commands, GPR file support, VS Code-compatible
+snippets and SPARK formal verification.
+
+## Features
+
+- Out-of-the-box ALS configuration (no nvim-lspconfig needed)
+- Automatic GPR project file management
+- Telescope picker for GPR file selection
+- gprbuild integration via `:make`
+- SPARK formal verification with gnatprove
+- Jump between `.ads` and `.adb` files
+- GPR file support with treesitter highlighting and dedicated LSP
+- VS Code-compatible snippets for Ada and GPR (via LuaSnip)
+- Package body generation and update via LSP code actions
+- VS Code-equivalent LSP capabilities
 
 ## Requirements
 
-- **Neovim** >= 0.10
-- **[Ada Language Server](https://github.com/AdaCore/ada_language_server)** - Must be configured and running
+- **Neovim** >= 0.11 (developed and tested on 0.12)
+- **[Ada Language Server](https://github.com/AdaCore/ada_language_server)** - Must be available in `$PATH`
 - **GNAT** - Must be available in `$PATH`
 - **[SPARK](https://github.com/AdaCore/spark2014)** - Formal verification tool for Ada (optional)
 
@@ -20,10 +35,11 @@ Neovim plugin providing Ada Language Server integration: GPR project management,
 ```lua
 {
   "stevenbias/ada_ls.nvim",
-  ft = { "ada" },
+  ft = { "ada", "gpr" },
   dependencies = {
-    "nvim-telescope/telescope.nvim",
-    "rcarriga/nvim-notify",  -- optional, for notifications
+    "nvim-telescope/telescope.nvim",  -- optional, for GPR file picker
+    "rcarriga/nvim-notify",           -- optional, for notifications
+    "L3MON4D3/LuaSnip",               -- optional, for snippets
   },
   opts = {},
 }
@@ -32,8 +48,9 @@ Neovim plugin providing Ada Language Server integration: GPR project management,
 ### vim-plug
 
 ```vim
-Plug 'nvim-telescope/telescope.nvim'
-Plug 'rcarriga/nvim-notify'  " optional
+Plug 'nvim-telescope/telescope.nvim'  " optional
+Plug 'rcarriga/nvim-notify'           " optional
+Plug 'L3MON4D3/LuaSnip'               " optional
 Plug 'stevenbias/ada_ls.nvim'
 
 lua << EOF
@@ -45,9 +62,10 @@ EOF
 
 ### Quick Start
 
-1. Open an Ada file in a project
-2. Configure Ada Language Server with the correct GPR file
-3. Use `:Als build` to compile
+1. Open an Ada file in your project
+2. The plugin auto-detects your project and starts ALS
+3. Select a GPR file if not auto-detected: `:Als pick_gpr`
+4. Build your project: `:Als build`
 
 ### Commands
 
@@ -97,6 +115,32 @@ This plugin removes the following useless default Ada keymaps:
 | `<leader>aj` | insert, normal | Removed |
 | `<leader>al` | insert | Removed |
 
+## GPR File Support
+
+The plugin provides support for GPR project files (`.gpr`):
+
+- `.gpr` files are registered as the `gpr` filetype automatically
+- Treesitter highlighting using the Ada parser
+- A dedicated LSP instance is started with `ada_language_server --language-gpr`
+
+No additional configuration is required.
+
+## Snippets
+
+The plugin ships VS Code-compatible snippets for Ada and GPR files, loaded
+automatically via LuaSnip's `lazy_load`. If LuaSnip is not installed,
+snippets are silently skipped.
+
+## Code Actions
+
+The plugin integrates with ALS code actions to provide:
+
+- **Package body generation**: When editing an Ada specification (`.ads`), ALS
+  can generate the corresponding package body (`.adb`) via
+  `vim.lsp.buf.code_action()`.
+- **Package body update**: When the specification changes, ALS can update the
+  existing body to match through the same mechanism.
+
 ## Configuration
 
 ### Default Configuration
@@ -109,6 +153,13 @@ require("ada_ls").setup({
   }
 })
 ```
+
+### Root Directory Detection
+
+The plugin determines the project root by searching upward for the following
+markers:
+
+`.als.json`, `Makefile`, `.git`, `alire.toml`, `*.gpr`, `*.adc`
 
 ### SPARK Proof Levels
 
