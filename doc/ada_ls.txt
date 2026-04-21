@@ -7,17 +7,20 @@ License: MIT
 ================================================================================
 CONTENTS                                                    *ada_ls-contents*
 
-  1. Introduction.........................|ada_ls-introduction|
-  2. Requirements.........................|ada_ls-requirements|
-  3. Dependencies.........................|ada_ls-dependencies|
-  4. Installation.........................|ada_ls-installation|
-  5. Quick Start..........................|ada_ls-quickstart|
-  6. Commands.............................|ada_ls-commands|
-  7. Configuration........................|ada_ls-configuration|
-  8. Files................................|ada_ls-files|
-  9. Troubleshooting.....................|ada_ls-troubleshooting|
-  10. Contributing........................|ada_ls-contributing|
-  11. License.............................|ada_ls-license|
+  1. Introduction..........................................|ada_ls-introduction|
+  2. Requirements..........................................|ada_ls-requirements|
+  3. Dependencies..........................................|ada_ls-dependencies|
+  4. Installation..........................................|ada_ls-installation|
+  5. Quick Start...........................................|ada_ls-quickstart|
+  6. Commands..............................................|ada_ls-commands|
+  7. Configuration.........................................|ada_ls-configuration|
+  8. GPR File Support......................................|ada_ls-gpr|
+  9. Snippets..............................................|ada_ls-snippets|
+  10. Code Actions.........................................|ada_ls-code-actions|
+  11. Files................................................|ada_ls-files|
+  12. Troubleshooting......................................|ada_ls-troubleshooting|
+  13. Contributing.........................................|ada_ls-contributing|
+  14. License..............................................|ada_ls-license|
 
 ================================================================================
 INTRODUCTION                                          *ada_ls-introduction*
@@ -26,18 +29,26 @@ ada_ls.nvim provides Ada Language Server (ALS) integration for Neovim. It
 enhances the Ada development workflow by managing GNAT project files (GPR),
 configuring build tools, and integrating with SPARK formal verification.
 
+The plugin configures ALS out of the box: no manual LSP setup or
+nvim-lspconfig is required.
+
 Features:
+- Out-of-the-box ALS configuration (no nvim-lspconfig needed)
 - Automatic GPR project file management
 - Telescope picker for GPR file selection
 - gprbuild integration via |:make|
 - SPARK formal verification with gnatprove
 - Jump between .ads and .adb files
+- GPR file support with treesitter highlighting and dedicated LSP
+- VS Code-compatible snippets for Ada and GPR (via LuaSnip)
+- Package body generation and update via LSP code actions
+- VS Code-equivalent LSP capabilities
 
 ================================================================================
 REQUIREMENTS                                          *ada_ls-requirements*
 
-- Neovim >= 0.10
-- Ada Language Server (ALS) - configured and running
+- Neovim >= 0.11 (developed and tested on 0.12)
+- Ada Language Server (ALS) installed and available in PATH
 - GNAT project file (GPR) for your project
 - GNAT toolchain with gprbuild, gprclean, and gnatprove
 
@@ -54,6 +65,10 @@ Optional plugins that enhance the experience:
    For enhanced notifications
    https://github.com/rcarriga/nvim-notify
 
+3. LuaSnip
+   For VS Code-compatible Ada and GPR snippets
+   https://github.com/L3MON4D3/LuaSnip
+
 ================================================================================
 INSTALLATION                                          *ada_ls-installation*
 
@@ -62,9 +77,10 @@ Using lazy.nvim: >lua
       "stevenbias/ada_ls.nvim",
       dependencies = {
         "nvim-telescope/telescope.nvim",  -- optional
-        "rcarriga/nvim-notify",          -- optional
+        "rcarriga/nvim-notify",           -- optional
+        "L3MON4D3/LuaSnip",              -- optional, for snippets
       },
-      ft = { "ada" },
+      ft = { "ada", "gpr" },
       opts = {},
     }
 <
@@ -72,6 +88,7 @@ Using lazy.nvim: >lua
 Using vim-plug: >vim
     Plug 'nvim-telescope/telescope.nvim'  " optional
     Plug 'rcarriga/nvim-notify'           " optional
+    Plug 'L3MON4D3/LuaSnip'              " optional
     Plug 'stevenbias/ada_ls.nvim'
 
     lua << EOF
@@ -86,15 +103,14 @@ After installation, add to your configuration: >lua
     require("ada_ls").setup()
 <
 
+The plugin automatically configures ALS when you open an Ada or GPR file.
+No manual LSP configuration is needed.
+
 Quick start: ~
 
 1. Open an Ada file in your project
-2. Configure Ada Language Server with the correct GPR file: >lua
-       require("ada_ls").setup({
-         -- Configuration options (optional)
-       })
-<
-3. Select a GPR file (optional, if not auto-detected): >
+2. The plugin auto-detects your project and starts ALS
+3. Select a GPR file if not auto-detected: >
        :Als pick_gpr
 <
 4. Build your project: >
@@ -113,7 +129,8 @@ COMMANDS                                                  *ada_ls-commands*
 
 :Als build                                                       *:Als-build*
     Build the project using gprbuild. Uses the current GPR file
-    from .als.json configuration.
+    from .als.json configuration. Closes the quickfix window before
+    building; it reopens automatically if there are errors.
 
 :Als clean                                                       *:Als-clean*
     Clean build artifacts using gprclean -r.
@@ -129,22 +146,27 @@ COMMANDS                                                  *ada_ls-commands*
     go-to-other-file functionality.
 
 :Als pick_gpr                                               *:Als-pick_gpr*
-    Open a Telescope picker to select a GPR file. Creates or
-    updates .als.json with the selected file.
+    Open a Telescope picker to select a GPR file. If only one GPR
+    file is found, it is auto-selected. Creates or updates .als.json
+    with the selected file.
 
 :Spark                                                          *:Spark*
     Main command for SPARK formal verification. Provides subcommands
     for running gnatprove.
 
 :Spark options                                             *:Spark-options*
-    Open a picker to set the proof level and additional options.
+    Open a two-step picker to set the proof level and additional
+    options. Step 1 selects the proof level (0-4), step 2 toggles
+    additional options via a floating window with checkboxes.
     Options are saved per-project in ada_ls_spark.json.
 
 :Spark prove                                                   *:Spark-prove*
     Run gnatprove on the entire project to verify formal properties.
+    Results are populated in the quickfix list.
 
 :Spark prove_file                                       *:Spark-prove_file*
-    Run gnatprove on the current file only.
+    Run gnatprove on the current file only. Results are populated
+    in the quickfix list.
 
 :Spark clean                                                   *:Spark-clean*
     Clean SPARK proof results and intermediate files.
@@ -193,6 +215,67 @@ SPARK Options ~                                               *ada_ls-options*
     info               Output info messages (--info)
     proof_warnings     Enable proof warnings (--proof-warnings=on)
 
+Root directory detection ~                                   *ada_ls-root-dir*
+
+    The plugin determines the project root by searching upward for the
+    following markers (in order):
+
+    - `.als.json`
+    - `Makefile`
+    - `.git`
+    - `alire.toml`
+    - `*.gpr`
+    - `*.adc`
+
+================================================================================
+GPR FILE SUPPORT                                              *ada_ls-gpr*
+
+The plugin provides first-class support for GNAT project files (.gpr):
+
+- `.gpr` files are registered as the `gpr` filetype automatically
+- Treesitter highlighting using the Ada parser
+- A dedicated LSP instance is started with `ada_language_server --language-gpr`
+  providing completions, diagnostics, and navigation for GPR files
+
+GPR file support is enabled automatically when opening a `.gpr` file. No
+additional configuration is required.
+
+================================================================================
+SNIPPETS                                                  *ada_ls-snippets*
+
+The plugin ships VS Code-compatible snippets for Ada and GPR files. These
+are loaded automatically via LuaSnip's `lazy_load` when LuaSnip is
+installed.
+
+Snippet files are located in `lua/ada_ls/snippets/`:
+- `ada-snippets.json` - Ada language snippets
+- `gpr-snippets.json` - GPR project file snippets
+
+No configuration is needed. If LuaSnip is not installed, snippets are
+silently skipped.
+
+================================================================================
+CODE ACTIONS                                          *ada_ls-code-actions*
+
+The plugin integrates with ALS code actions to provide:
+
+Package body generation ~
+    When editing an Ada specification (.ads), ALS can generate the
+    corresponding package body (.adb). The plugin handles the
+    `workspace/applyEdit` response to:
+
+    - Create the new body file
+    - Open it in the editor
+    - Remove trailing empty lines from generated code
+    - Restart ALS to pick up the new file
+
+    This is triggered through the standard LSP code action mechanism
+    (e.g., `vim.lsp.buf.code_action()`).
+
+Package body update ~
+    When the specification changes, ALS can update the existing body
+    to match. The plugin handles this via the same code action flow.
+
 ================================================================================
 FILES                                                        *ada_ls-files*
 
@@ -232,7 +315,7 @@ Verify your installation and configuration: >
 <
 
 This will check:
-- Neovim version compatibility
+- Neovim version compatibility (>= 0.11)
 - External tools (gprbuild, gprclean, gnatprove)
 - Ada Language Server status
 - Configuration validity

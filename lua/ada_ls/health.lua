@@ -103,7 +103,7 @@ end
 
 function M.check()
   vim.health.start("ada_ls.nvim: Neovim version")
-  if vim.fn.has("nvim-0.10") == 1 then
+  if vim.fn.has("nvim-0.11") == 1 then
     local version = vim.version()
     vim.health.ok(
       string.format(
@@ -115,8 +115,8 @@ function M.check()
     )
   else
     vim.health.error(
-      "Neovim >= 0.10 required",
-      { "Upgrade Neovim to version 0.10 or newer" }
+      "Neovim >= 0.11 required",
+      { "Upgrade Neovim to version 0.11 or newer" }
     )
   end
 

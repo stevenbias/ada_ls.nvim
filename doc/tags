@@ -12,12 +12,14 @@
 :Spark-prove_file	ada_ls.txt	/*:Spark-prove_file*
 ada_ls	ada_ls.txt	/*ada_ls*
 ada_ls-checkhealth	ada_ls.txt	/*ada_ls-checkhealth*
+ada_ls-code-actions	ada_ls.txt	/*ada_ls-code-actions*
 ada_ls-commands	ada_ls.txt	/*ada_ls-commands*
 ada_ls-configuration	ada_ls.txt	/*ada_ls-configuration*
 ada_ls-contents	ada_ls.txt	/*ada_ls-contents*
 ada_ls-contributing	ada_ls.txt	/*ada_ls-contributing*
 ada_ls-dependencies	ada_ls.txt	/*ada_ls-dependencies*
 ada_ls-files	ada_ls.txt	/*ada_ls-files*
+ada_ls-gpr	ada_ls.txt	/*ada_ls-gpr*
 ada_ls-installation	ada_ls.txt	/*ada_ls-installation*
 ada_ls-introduction	ada_ls.txt	/*ada_ls-introduction*
 ada_ls-levels	ada_ls.txt	/*ada_ls-levels*
@@ -25,5 +27,7 @@ ada_ls-license	ada_ls.txt	/*ada_ls-license*
 ada_ls-options	ada_ls.txt	/*ada_ls-options*
 ada_ls-quickstart	ada_ls.txt	/*ada_ls-quickstart*
 ada_ls-requirements	ada_ls.txt	/*ada_ls-requirements*
+ada_ls-root-dir	ada_ls.txt	/*ada_ls-root-dir*
+ada_ls-snippets	ada_ls.txt	/*ada_ls-snippets*
 ada_ls-troubleshooting	ada_ls.txt	/*ada_ls-troubleshooting*
 ada_ls.setup()	ada_ls.txt	/*ada_ls.setup()*
