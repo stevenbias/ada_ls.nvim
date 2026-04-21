@@ -117,8 +117,6 @@ local function save_config()
 
   create_config(config)
   save_new_configuration(project_file_path, config)
-
-  require("ada_ls.gpr").makeprg_setup()
 end
 
 local function detect_project_files(root_dir)

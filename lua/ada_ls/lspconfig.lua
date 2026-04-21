@@ -20,7 +20,7 @@ local function als_capabilities()
 
   -- From: https://github.com/romgrk/fzy-lua-native/blob/master/lua/init.lua
   local dirname =
-    string.sub(debug.getinfo(1).source, 2, string.len("/init.lua") * -1)
+    string.sub(debug.getinfo(1).source, 2, string.len("/lspconfig.lua") * -1)
 
   local file = io.open(dirname .. "vscode_capabilities.json", "r")
   if not file then
