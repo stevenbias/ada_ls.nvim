@@ -72,9 +72,6 @@ describe("ada_ls.spark", function()
       end
       return dst
     end)
-    rawset(vim, "uri_to_fname", function(uri)
-      return uri:gsub("^file://", "")
-    end)
     rawset(vim, "tbl_deep_extend", function(_, t1, t2)
       local result = {}
       for k, v in pairs(t1) do
@@ -508,9 +505,9 @@ other.ads:5:1: error: cannot prove precondition
       it("calls vim.system with gnatprove when project exists", function()
         local mock_client = common.create_lsp_client({
           root_dir = "/project/root",
-          request_sync = stub.new().returns({
-            result = { "file:///project/root/test.gpr" },
-          }),
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
         })
         common.setup_lsp_client(mock_client)
         package.loaded["ada_ls.utils"] = nil
@@ -528,9 +525,9 @@ other.ads:5:1: error: cannot prove precondition
       it("includes -u flag and filename in args", function()
         local mock_client = common.create_lsp_client({
           root_dir = "/project/root",
-          request_sync = stub.new().returns({
-            result = { "file:///project/root/test.gpr" },
-          }),
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
         })
         common.setup_lsp_client(mock_client)
         package.loaded["ada_ls.utils"] = nil
@@ -562,9 +559,9 @@ other.ads:5:1: error: cannot prove precondition
       it("calls gnatprove with --clean", function()
         local mock_client = common.create_lsp_client({
           root_dir = "/project/root",
-          request_sync = stub.new().returns({
-            result = { "file:///project/root/test.gpr" },
-          }),
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
         })
         common.setup_lsp_client(mock_client)
         package.loaded["ada_ls.utils"] = nil

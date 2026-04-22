@@ -4,6 +4,7 @@ local common = require("spec.helpers.common")
 
 describe("ada_ls.gpr", function()
   local gpr
+  local project_mock
 
   before_each(function()
     common.cleanup_packages()
@@ -12,21 +13,32 @@ describe("ada_ls.gpr", function()
         return "/project/root"
       end,
     })
-    -- Mock vim.system for async operations
     rawset(vim, "system", stub.new())
     rawset(vim, "schedule", function(fn)
       fn()
     end)
+
+    project_mock = {
+      decode_json_config = function()
+        return nil
+      end,
+    }
+    package.preload["ada_ls.project"] = function()
+      return project_mock
+    end
+    package.loaded["ada_ls.project"] = nil
+
     gpr = require("ada_ls.gpr")
   end)
 
   after_each(function()
     common.cleanup_packages()
+    package.preload["ada_ls.project"] = nil
+    package.loaded["ada_ls.project"] = nil
   end)
 
   describe("clean", function()
     it("notifies warning when no config file found", function()
-      -- Setup: get_conf_file returns nil (no LSP client)
       vim.lsp.get_clients = stub.new().returns({})
 
       gpr.clean()
@@ -37,22 +49,9 @@ describe("ada_ls.gpr", function()
     end)
 
     it("notifies warning when no project file in config", function()
-      -- Setup: get_conf_file returns a path, but decode_json_config returns nil
       local mock_client =
         common.create_lsp_client({ root_dir = "/project/root" })
       common.setup_lsp_client(mock_client)
-
-      -- Mock project.decode_json_config to return nil
-      package.preload["ada_ls.project"] = function()
-        return {
-          decode_json_config = function()
-            return nil
-          end,
-        }
-      end
-      -- Force reload of gpr to pick up the mock
-      package.loaded["ada_ls.gpr"] = nil
-      gpr = require("ada_ls.gpr")
 
       gpr.clean()
 
@@ -66,82 +65,14 @@ describe("ada_ls.gpr", function()
       end
       assert.is_true(found_msg)
     end)
-  end)
 
-  describe("makeprg_setup", function()
-    it("sets vim.o.makeprg when config is valid", function()
-      -- Setup: mock get_conf_file and decode_json_config
-      local mock_client =
-        common.create_lsp_client({ root_dir = "/project/root" })
-      common.setup_lsp_client(mock_client)
-
-      package.preload["ada_ls.project"] = function()
-        return {
-          decode_json_config = function()
-            return "/project/root/my_project.gpr", " -XMODE=debug"
-          end,
-        }
-      end
-      package.loaded["ada_ls.gpr"] = nil
-      gpr = require("ada_ls.gpr")
-
-      gpr.makeprg_setup()
-
-      assert.is_string(vim.o.makeprg)
-      assert.matches("gprbuild", vim.o.makeprg)
-      assert.matches("-P", vim.o.makeprg)
-      assert.matches("my_project.gpr", vim.o.makeprg)
-    end)
-
-    it("sets vim.o.errorformat to gprbuild format", function()
-      local mock_client =
-        common.create_lsp_client({ root_dir = "/project/root" })
-      common.setup_lsp_client(mock_client)
-
-      package.preload["ada_ls.project"] = function()
-        return {
-          decode_json_config = function()
-            return "/project/root/my_project.gpr", ""
-          end,
-        }
-      end
-      package.loaded["ada_ls.gpr"] = nil
-      gpr = require("ada_ls.gpr")
-
-      gpr.makeprg_setup()
-
-      assert.is_string(vim.o.errorformat)
-      -- Should contain line:column patterns for gprbuild
-      assert.matches("%%f:%%l:%%c:", vim.o.errorformat)
-    end)
-
-    it("returns early when gprbuild_cmd returns nil", function()
-      -- Setup: no LSP client, so gprbuild_cmd returns nil
-      vim.lsp.get_clients = stub.new().returns({})
-      vim.o.makeprg = nil
-
-      gpr.makeprg_setup()
-
-      -- makeprg should not be set
-      assert.is_nil(vim.o.makeprg)
-    end)
-  end)
-
-  describe("clean", function()
     it("calls vim.system with gprclean when config valid", function()
       local mock_client =
         common.create_lsp_client({ root_dir = "/project/root" })
       common.setup_lsp_client(mock_client)
-
-      package.preload["ada_ls.project"] = function()
-        return {
-          decode_json_config = function()
-            return "/project/root/my_project.gpr", ""
-          end,
-        }
+      project_mock.decode_json_config = function()
+        return "/project/root/my_project.gpr", ""
       end
-      package.loaded["ada_ls.gpr"] = nil
-      gpr = require("ada_ls.gpr")
 
       gpr.clean()
 
@@ -157,18 +88,10 @@ describe("ada_ls.gpr", function()
       local mock_client =
         common.create_lsp_client({ root_dir = "/project/root" })
       common.setup_lsp_client(mock_client)
-
-      package.preload["ada_ls.project"] = function()
-        return {
-          decode_json_config = function()
-            return "/project/root/my_project.gpr", ""
-          end,
-        }
+      project_mock.decode_json_config = function()
+        return "/project/root/my_project.gpr", ""
       end
-      package.loaded["ada_ls.gpr"] = nil
-      gpr = require("ada_ls.gpr")
 
-      -- Capture the callback passed to vim.system
       local captured_callback
       rawset(vim, "system", function(_cmd, _opts, callback)
         captured_callback = callback
@@ -176,11 +99,9 @@ describe("ada_ls.gpr", function()
 
       gpr.clean()
 
-      -- Invoke the callback with success result
       assert.is_function(captured_callback)
       captured_callback({ code = 0 })
 
-      -- Check that success notification was sent
       local found_success = false
       for _, call in ipairs(vim.notify.calls) do
         if call.vals[1] and call.vals[1]:match("Clean successful") then
@@ -195,18 +116,10 @@ describe("ada_ls.gpr", function()
       local mock_client =
         common.create_lsp_client({ root_dir = "/project/root" })
       common.setup_lsp_client(mock_client)
-
-      package.preload["ada_ls.project"] = function()
-        return {
-          decode_json_config = function()
-            return "/project/root/my_project.gpr", ""
-          end,
-        }
+      project_mock.decode_json_config = function()
+        return "/project/root/my_project.gpr", ""
       end
-      package.loaded["ada_ls.gpr"] = nil
-      gpr = require("ada_ls.gpr")
 
-      -- Capture the callback passed to vim.system
       local captured_callback
       rawset(vim, "system", function(_cmd, _opts, callback)
         captured_callback = callback
@@ -214,11 +127,9 @@ describe("ada_ls.gpr", function()
 
       gpr.clean()
 
-      -- Invoke the callback with failure result
       assert.is_function(captured_callback)
       captured_callback({ code = 1, stderr = "gprclean: error message" })
 
-      -- Check that error notification was sent
       local found_error = false
       for _, call in ipairs(vim.notify.calls) do
         if call.vals[1] and call.vals[1]:match("Clean failed") then
@@ -230,7 +141,88 @@ describe("ada_ls.gpr", function()
     end)
   end)
 
-  -- Private function tests - only run in test mode
+  describe("makeprg_setup", function()
+    it("sets vim.o.makeprg when config is valid", function()
+      local mock_client =
+        common.create_lsp_client({ root_dir = "/project/root" })
+      common.setup_lsp_client(mock_client)
+      project_mock.decode_json_config = function()
+        return "/project/root/my_project.gpr", " -XMODE=debug"
+      end
+
+      gpr.makeprg_setup()
+
+      assert.is_string(vim.o.makeprg)
+      assert.matches("gprbuild", vim.o.makeprg)
+      assert.matches("-P", vim.o.makeprg)
+      assert.matches("my_project.gpr", vim.o.makeprg)
+    end)
+
+    it("sets vim.o.errorformat with all gprbuild patterns", function()
+      local mock_client =
+        common.create_lsp_client({ root_dir = "/project/root" })
+      common.setup_lsp_client(mock_client)
+      project_mock.decode_json_config = function()
+        return "/project/root/my_project.gpr", ""
+      end
+
+      gpr.makeprg_setup()
+
+      assert.is_string(vim.o.errorformat)
+      assert.matches("%%f:%%l:%%c:", vim.o.errorformat)
+      assert.matches("%%f:%%l:", vim.o.errorformat)
+      assert.matches("%%*", vim.o.errorformat)
+      assert.matches("%-G", vim.o.errorformat)
+    end)
+
+    it("returns early when gprbuild_cmd returns nil", function()
+      vim.lsp.get_clients = stub.new().returns({})
+      vim.o.makeprg = nil
+
+      gpr.makeprg_setup()
+
+      assert.is_nil(vim.o.makeprg)
+    end)
+
+    it("uses json_config parameter directly when provided", function()
+      local mock_client =
+        common.create_lsp_client({ root_dir = "/project/root" })
+      common.setup_lsp_client(mock_client)
+
+      local json_config = {
+        projectFile = "/test/my_project.gpr",
+        scenarioVariables = {
+          MODE = "debug",
+          ARCH = "x86_64",
+        },
+      }
+      gpr.makeprg_setup(json_config)
+
+      assert.is_string(vim.o.makeprg)
+      assert.matches("gprbuild", vim.o.makeprg)
+      assert.matches("-P", vim.o.makeprg)
+      assert.matches("my_project.gpr", vim.o.makeprg)
+      assert.matches("-XMODE=debug", vim.o.makeprg)
+      assert.matches("-XARCH=x86_64", vim.o.makeprg)
+    end)
+
+    it("excludes -X vars when scenarioVariables is empty", function()
+      local mock_client =
+        common.create_lsp_client({ root_dir = "/project/root" })
+      common.setup_lsp_client(mock_client)
+
+      local json_config = {
+        projectFile = "/test/my_project.gpr",
+        scenarioVariables = {},
+      }
+      gpr.makeprg_setup(json_config)
+
+      assert.is_string(vim.o.makeprg)
+      assert.matches("gprbuild", vim.o.makeprg)
+      assert.not_matches("%-X", vim.o.makeprg)
+    end)
+  end)
+
   if os.getenv("ADA_LS_TEST_MODE") then
     describe("_gprbuild_cmd", function()
       it("returns nil when no config file found", function()
@@ -245,16 +237,6 @@ describe("ada_ls.gpr", function()
           common.create_lsp_client({ root_dir = "/project/root" })
         common.setup_lsp_client(mock_client)
 
-        package.preload["ada_ls.project"] = function()
-          return {
-            decode_json_config = function()
-              return nil
-            end,
-          }
-        end
-        package.loaded["ada_ls.gpr"] = nil
-        gpr = require("ada_ls.gpr")
-
         local result = gpr._gprbuild_cmd()
         assert.is_nil(result)
       end)
@@ -263,16 +245,9 @@ describe("ada_ls.gpr", function()
         local mock_client =
           common.create_lsp_client({ root_dir = "/project/root" })
         common.setup_lsp_client(mock_client)
-
-        package.preload["ada_ls.project"] = function()
-          return {
-            decode_json_config = function()
-              return "/project/root/my_project.gpr", " -XMODE=debug"
-            end,
-          }
+        project_mock.decode_json_config = function()
+          return "/project/root/my_project.gpr", " -XMODE=debug"
         end
-        package.loaded["ada_ls.gpr"] = nil
-        gpr = require("ada_ls.gpr")
 
         local result = gpr._gprbuild_cmd()
         assert.is_string(result)
@@ -289,20 +264,30 @@ describe("ada_ls.gpr", function()
         local mock_client =
           common.create_lsp_client({ root_dir = "/project/root" })
         common.setup_lsp_client(mock_client)
-
-        package.preload["ada_ls.project"] = function()
-          return {
-            decode_json_config = function()
-              return "/project/root/test.gpr", " -XARCH=x86_64 -XDEBUG=true"
-            end,
-          }
+        project_mock.decode_json_config = function()
+          return "/project/root/test.gpr", " -XARCH=x86_64 -XDEBUG=true"
         end
-        package.loaded["ada_ls.gpr"] = nil
-        gpr = require("ada_ls.gpr")
 
         local result = gpr._gprbuild_cmd()
         assert.matches("-XARCH=x86_64", result)
         assert.matches("-XDEBUG=true", result)
+      end)
+
+      it("uses json_config parameter directly", function()
+        local mock_client =
+          common.create_lsp_client({ root_dir = "/project/root" })
+        common.setup_lsp_client(mock_client)
+
+        local json_config = {
+          projectFile = "/test/direct.gpr",
+          scenarioVariables = {
+            TEST = "yes",
+          },
+        }
+        local result = gpr._gprbuild_cmd(json_config)
+        assert.is_string(result)
+        assert.matches("direct.gpr", result)
+        assert.matches("-XTEST=yes", result)
       end)
     end)
   end
