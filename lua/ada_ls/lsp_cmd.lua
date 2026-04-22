@@ -7,14 +7,21 @@ function M.send_request(req)
     return nil, "Ada LSP client not found"
   end
 
+  local result, err = nil, nil
   local params = vim.lsp.util.make_position_params(0, client.offset_encoding)
-  local result, err = client:request_sync(req, params, 5000)
+  client:request(req, params, function(e, r)
+    err = e
+    result = r
+  end)
+  vim.wait(2000, function()
+    return result ~= nil or err ~= nil
+  end)
 
-  if err or not result or not result.result then
+  if err or not result then
     return nil, err or ("Request '" .. req .. "' failed")
   end
 
-  return vim.islist(result.result) and result.result or { result.result }
+  return vim.islist(result) and result or { result }
 end
 
 function M.send_command(cmd, args)
@@ -28,14 +35,20 @@ function M.send_command(cmd, args)
     command = cmd,
     arguments = { args },
   }
-  local result, err =
-    client:request_sync("workspace/executeCommand", params, 5000)
+  local result, err
+  client:request("workspace/executeCommand", params, function(e, r)
+    err = e
+    result = r
+  end)
+  vim.wait(2000, function()
+    return result ~= nil or err ~= nil
+  end)
 
-  if err or not result or not result.result then
+  if err or not result then
     return nil, err or ("Command '" .. cmd .. "' failed")
   end
 
-  return vim.islist(result.result) and result.result or { result.result }
+  return vim.islist(result) and result or { result }
 end
 
 function M.get_root_dir()
