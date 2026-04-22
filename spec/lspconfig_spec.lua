@@ -35,6 +35,12 @@ describe("ada_ls.lspconfig", function()
     return vim.lsp.handlers["workspace/applyEdit"]
   end
 
+  -- Helper: build a ctx table that identifies the client as ada_ls
+  local function als_ctx()
+    vim.lsp.get_clients = stub.new().returns({ { name = "ada_ls" } })
+    return { client_id = 1 }
+  end
+
   describe("get", function()
     it(
       "returns config with capabilities, handlers, on_attach and root_dir",
@@ -178,7 +184,7 @@ describe("ada_ls.lspconfig", function()
           },
         }
 
-        handler(nil, result, {}, {})
+        handler(nil, result, als_ctx(), {})
 
         assert.is_nil(result.edit.documentChanges[1].edits[1].annotationId)
         assert.is_nil(result.edit.documentChanges[1].edits[2].annotationId)
@@ -214,7 +220,7 @@ describe("ada_ls.lspconfig", function()
               { kind = "create", uri = "file:///test/new_file.adb" },
             },
           },
-        }, {}, {})
+        }, als_ctx(), {})
 
         assert.is_true(original_called)
         assert.equals(1, #scheduled_fns)
@@ -254,7 +260,7 @@ describe("ada_ls.lspconfig", function()
               { kind = "create", uri = "file:///test/new_file.adb" },
             },
           },
-        }, {}, {})
+        }, als_ctx(), {})
 
         vim.cmd = { edit = stub.new(), normal = stub.new() }
         vim.fn.getline = stub.new().returns("end My_Package;")
@@ -274,6 +280,15 @@ describe("ada_ls.lspconfig", function()
 
         local handler = setup_handler(function() end)
 
+        package.loaded["ada_ls.utils"] = {
+          reset_als_client = stub.new(),
+          try_require = function()
+            return false
+          end,
+          notify = stub.new(),
+          clear = stub.new(),
+        }
+
         handler(nil, {
           edit = {
             changeAnnotations = { ann1 = {} },
@@ -281,7 +296,7 @@ describe("ada_ls.lspconfig", function()
               { textDocument = { uri = "file:///test/existing.adb" } },
             },
           },
-        }, {}, {})
+        }, als_ctx(), {})
 
         assert.equals(1, #scheduled_fns)
         vim.cmd = { edit = stub.new() }

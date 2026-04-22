@@ -47,6 +47,14 @@ local function als_handlers()
   local original_apply_edit = vim.lsp.handlers["workspace/applyEdit"]
 
   vim.lsp.handlers["workspace/applyEdit"] = function(err, result, ctx, config)
+    -- Only apply ALS-specific logic for ada_ls clients
+    local client = ctx
+      and ctx.client_id
+      and vim.lsp.get_clients({ id = ctx.client_id })[1]
+    if not client or client.name ~= "ada_ls" then
+      return original_apply_edit(err, result, ctx, config)
+    end
+
     -- ALS sends AnnotatedTextEdit without the required changeAnnotations
     -- map, causing Neovim >= 0.12 to fail. Remove the capability so ALS
     -- sends plain TextEdit instead.
