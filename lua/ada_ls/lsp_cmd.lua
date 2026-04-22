@@ -44,11 +44,11 @@ function M.send_command(cmd, args)
     return result ~= nil or err ~= nil
   end)
 
-  if err or not result then
+  if err then
     return nil, err or ("Command '" .. cmd .. "' failed")
   end
 
-  return vim.islist(result) and result or { result }
+  return result
 end
 
 function M.get_root_dir()
@@ -70,10 +70,10 @@ end
 
 function M.get_prj_file()
   local prj_file = M.send_command("als-project-file")
-  if not prj_file or #prj_file == 0 then
+  if not prj_file then
     return nil, "No project file found"
   end
-  return prj_file[1]
+  return prj_file
 end
 
 function M.get_prj_dependencies()
