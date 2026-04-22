@@ -241,7 +241,7 @@ function M.setup()
   end
 
   notify_configuration_change(json_config)
-  require("ada_ls.gpr").makeprg_setup()
+  require("ada_ls.gpr").makeprg_setup(json_config)
   vim.notify_once(
     "Configuration loaded from " .. ada_ls_conf_path,
     vim.log.levels.INFO

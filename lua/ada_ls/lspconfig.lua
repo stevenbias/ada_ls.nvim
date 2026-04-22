@@ -1,8 +1,7 @@
 local M = {}
 
-local group = vim.api.nvim_create_augroup("AdaLsLspConfig", { clear = true })
-
 local function open_qf_on_make()
+  local group = vim.api.nvim_create_augroup("AdaLsLspConfig", { clear = true })
   -- auto-open quickfix only when :make produced entries
   vim.api.nvim_create_autocmd("QuickFixCmdPost", {
     group = group,
