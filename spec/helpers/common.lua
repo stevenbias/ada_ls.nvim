@@ -118,6 +118,12 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
   rawset(vim, "uri_from_bufnr", function(_bufnr)
     return "file:///test/path/file.adb"
   end)
+  rawset(vim, "uri_to_fname", function(uri)
+    if not uri then
+      return nil
+    end
+    return uri:gsub("^file://", "")
+  end)
 
   -- Set up vim.islist
   rawset(vim, "islist", function(t)
@@ -189,6 +195,14 @@ function M.create_lsp_client(overrides)
     root_dir = "/project/root",
     offset_encoding = "utf-8",
     request_sync = stub.new().returns(nil),
+    request = function(self, method, params, callback)
+      local result = self.request_sync(self, method, params)
+      if result and result.result ~= nil then
+        callback(nil, result.result)
+      else
+        callback(nil, result)
+      end
+    end,
     notify = stub.new(),
     stop = stub.new(),
   }

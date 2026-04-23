@@ -1,7 +1,5 @@
 local M = {}
 
-local group = vim.api.nvim_create_augroup("AdaLsSetup", { clear = true })
-
 local function clear()
   require("ada_ls.project").clear()
   require("ada_ls.utils").clear()
@@ -36,6 +34,7 @@ function M.setup(opts)
 
   vim.lsp.config("ada_ls", lspconfig)
 
+  local group = vim.api.nvim_create_augroup("AdaLsSetup", { clear = true })
   vim.api.nvim_create_autocmd("LspDetach", {
     group = group,
     pattern = { "*.ad[bs]" },

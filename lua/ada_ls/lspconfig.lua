@@ -1,8 +1,7 @@
 local M = {}
 
-local group = vim.api.nvim_create_augroup("AdaLsLspConfig", { clear = true })
-
 local function open_qf_on_make()
+  local group = vim.api.nvim_create_augroup("AdaLsLspConfig", { clear = true })
   -- auto-open quickfix only when :make produced entries
   vim.api.nvim_create_autocmd("QuickFixCmdPost", {
     group = group,
@@ -48,6 +47,14 @@ local function als_handlers()
   local original_apply_edit = vim.lsp.handlers["workspace/applyEdit"]
 
   vim.lsp.handlers["workspace/applyEdit"] = function(err, result, ctx, config)
+    -- Only apply ALS-specific logic for ada_ls clients
+    local client = ctx
+      and ctx.client_id
+      and vim.lsp.get_clients({ id = ctx.client_id })[1]
+    if not client or client.name ~= "ada_ls" then
+      return original_apply_edit(err, result, ctx, config)
+    end
+
     -- ALS sends AnnotatedTextEdit without the required changeAnnotations
     -- map, causing Neovim >= 0.12 to fail. Remove the capability so ALS
     -- sends plain TextEdit instead.

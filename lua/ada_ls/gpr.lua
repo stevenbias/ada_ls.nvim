@@ -25,16 +25,29 @@ function M.clean()
   end)
 end
 
-local function gprbuild_cmd()
+---@param json_config? table Pre-decoded .als.json content to avoid redundant I/O
+local function gprbuild_cmd(json_config)
   local notify = require("ada_ls.utils").notify
-  local conf_file = require("ada_ls.utils").get_conf_file()
-  if conf_file == nil then
-    notify("No configuration file found", vim.log.levels.WARN)
-    return nil
+  local prj_file, scenar_vars
+
+  if json_config then
+    prj_file = json_config["projectFile"]
+    scenar_vars = ""
+    if json_config["scenarioVariables"] then
+      for k, v in pairs(json_config["scenarioVariables"]) do
+        scenar_vars = scenar_vars .. " -X" .. k .. "=" .. tostring(v)
+      end
+    end
+  else
+    local conf_file = require("ada_ls.utils").get_conf_file()
+    if conf_file == nil then
+      notify("No configuration file found", vim.log.levels.WARN)
+      return nil
+    end
+    prj_file, scenar_vars =
+      require("ada_ls.project").decode_json_config(conf_file)
   end
 
-  local prj_file, scenar_vars =
-    require("ada_ls.project").decode_json_config(conf_file)
   if not prj_file then
     notify("No Ada project file selected.", vim.log.levels.WARN)
     return nil
@@ -42,8 +55,9 @@ local function gprbuild_cmd()
   return ("gprbuild" .. " -d -p -gnatef" .. scenar_vars .. " -P " .. prj_file)
 end
 
-function M.makeprg_setup()
-  local cmd = gprbuild_cmd()
+---@param json_config? table Pre-decoded .als.json content to avoid redundant I/O
+function M.makeprg_setup(json_config)
+  local cmd = gprbuild_cmd(json_config)
   if cmd == nil then
     return
   end

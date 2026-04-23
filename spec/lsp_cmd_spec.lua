@@ -6,11 +6,6 @@ describe("ada_ls.lsp_cmd", function()
   local lsp_cmd
   local utils
 
-  -- Test data builders
-  local function create_lsp_result(data)
-    return { result = data }
-  end
-
   before_each(function()
     common.cleanup_packages()
     common.setup_vim_globals()
@@ -43,9 +38,9 @@ describe("ada_ls.lsp_cmd", function()
   describe("get_symbols", function()
     it("returns symbols list on success", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub.new().returns(
-          create_lsp_result({ { name = "Main" }, { name = "Test" } })
-        ),
+        request = function(_self, _method, _params, callback)
+          callback(nil, { { name = "Main" }, { name = "Test" } })
+        end,
       })
       common.setup_lsp_client(mock_client)
 
@@ -58,9 +53,9 @@ describe("ada_ls.lsp_cmd", function()
   describe("get_declarations", function()
     it("returns declarations list on success", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub.new().returns(create_lsp_result({
-          { uri = "file:///test.ads", range = {} },
-        })),
+        request = function(_self, _method, _params, callback)
+          callback(nil, { { uri = "file:///test.ads", range = {} } })
+        end,
       })
       common.setup_lsp_client(mock_client)
 
@@ -73,7 +68,9 @@ describe("ada_ls.lsp_cmd", function()
   describe("get_prj_file", function()
     it("returns nil and error when no project file", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub.new().returns(create_lsp_result({})),
+        request = function(_self, _method, _params, callback)
+          callback(nil, nil)
+        end,
       })
       common.setup_lsp_client(mock_client)
 
@@ -84,9 +81,9 @@ describe("ada_ls.lsp_cmd", function()
 
     it("returns project file path on success", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub
-          .new()
-          .returns(create_lsp_result({ "/project/test.gpr" })),
+        request = function(_self, _method, _params, callback)
+          callback(nil, "/project/test.gpr")
+        end,
       })
       common.setup_lsp_client(mock_client)
 
@@ -99,7 +96,9 @@ describe("ada_ls.lsp_cmd", function()
   describe("get_prj_dependencies", function()
     it("returns nil when no project file", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub.new().returns(create_lsp_result({})),
+        request = function(_self, _method, _params, callback)
+          callback(nil, nil)
+        end,
       })
       common.setup_lsp_client(mock_client)
 
@@ -111,23 +110,20 @@ describe("ada_ls.lsp_cmd", function()
     it("returns dependencies when project file exists", function()
       local call_count = 0
       local mock_client = common.create_lsp_client({
-        request_sync = function(_self, method, _params, _timeout)
+        request = function(_self, method, _params, callback)
           call_count = call_count + 1
           if method == "workspace/executeCommand" then
             if call_count == 1 then
               -- First call: als-project-file
-              return { result = { "/project/main.gpr" } }
+              callback(nil, "/project/main.gpr")
             else
               -- Second call: als-gpr-dependencies
-              return {
-                result = {
-                  { uri = "file:///project/lib1.gpr" },
-                  { uri = "file:///project/lib2.gpr" },
-                },
-              }
+              callback(nil, {
+                { uri = "file:///project/lib1.gpr" },
+                { uri = "file:///project/lib2.gpr" },
+              })
             end
           end
-          return nil
         end,
       })
       common.setup_lsp_client(mock_client)
@@ -142,25 +138,24 @@ describe("ada_ls.lsp_cmd", function()
   describe("go_to_other", function()
     it("sends als-other-file command with current buffer URI", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub
-          .new()
-          .returns(create_lsp_result("file:///test.ads")),
+        request = function(_self, _method, _params, callback)
+          callback(nil, "file:///test.ads")
+        end,
       })
       common.setup_lsp_client(mock_client)
 
       local result, err = lsp_cmd.go_to_other()
       assert.is_nil(err)
       assert.is_not_nil(result)
-      assert.stub(mock_client.request_sync).was_called()
     end)
   end)
 
   describe("get_src_dirs", function()
     it("returns source directories on success", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub
-          .new()
-          .returns(create_lsp_result({ "/src", "/lib/src" })),
+        request = function(_self, _method, _params, callback)
+          callback(nil, { "/src", "/lib/src" })
+        end,
       })
       common.setup_lsp_client(mock_client)
 
@@ -173,13 +168,15 @@ describe("ada_ls.lsp_cmd", function()
   describe("get_obj_dir", function()
     it("returns object directory on success", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub.new().returns(create_lsp_result("/obj")),
+        request = function(_self, _method, _params, callback)
+          callback(nil, "/obj")
+        end,
       })
       common.setup_lsp_client(mock_client)
 
       local result, err = lsp_cmd.get_obj_dir()
       assert.is_nil(err)
-      assert.same({ "/obj" }, result)
+      assert.equals("/obj", result)
     end)
   end)
 
@@ -194,9 +191,9 @@ describe("ada_ls.lsp_cmd", function()
 
     it("returns result as list for successful request", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub
-          .new()
-          .returns(create_lsp_result({ "symbol1", "symbol2" })),
+        request = function(_self, _method, _params, callback)
+          callback(nil, { "symbol1", "symbol2" })
+        end,
       })
       common.setup_lsp_client(mock_client)
 
@@ -207,7 +204,9 @@ describe("ada_ls.lsp_cmd", function()
 
     it("returns error when request fails", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub.new().returns(nil, "Request timed out"),
+        request = function(_self, _method, _params, callback)
+          callback("Request timed out", nil)
+        end,
       })
       common.setup_lsp_client(mock_client)
 
@@ -228,20 +227,22 @@ describe("ada_ls.lsp_cmd", function()
 
     it("returns result for successful command", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub
-          .new()
-          .returns(create_lsp_result("/path/to/project.gpr")),
+        request = function(_self, _method, _params, callback)
+          callback(nil, "/path/to/project.gpr")
+        end,
       })
       common.setup_lsp_client(mock_client)
 
       local result, err = lsp_cmd.send_command("als-project-file")
       assert.is_nil(err)
-      assert.same({ "/path/to/project.gpr" }, result)
+      assert.equals("/path/to/project.gpr", result)
     end)
 
     it("returns error when command fails", function()
       local mock_client = common.create_lsp_client({
-        request_sync = stub.new().returns(nil, "Command not found"),
+        request = function(_self, _method, _params, callback)
+          callback("Command not found", nil)
+        end,
       })
       common.setup_lsp_client(mock_client)
 
