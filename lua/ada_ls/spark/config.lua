@@ -122,6 +122,7 @@ end
 
 if os.getenv("ADA_LS_TEST_MODE") then
   M._ids_to_opts = ids_to_opts
+  M._opts_to_ids = opts_to_ids
   M._is_valid = is_valid
 end
 

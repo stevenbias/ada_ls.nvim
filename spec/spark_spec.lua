@@ -239,6 +239,111 @@ describe("ada_ls.spark", function()
           assert.equals(3, state.proof_level)
           assert.same({ 1, 3, 5 }, state.options)
         end)
+
+        it("returns defaults when proof_level is string", function()
+          local mock_client =
+            common.create_lsp_client({ root_dir = "/my/project" })
+          common.setup_lsp_client(mock_client)
+          package.loaded["ada_ls.utils"] = nil
+
+          os.execute("mkdir -p /tmp/nvim-test-data")
+          local f = io.open(test_state_file, "w")
+          f:write('{ "/my/project": { "proof_level": "2", "options": [1] } }')
+          f:close()
+
+          rawset(vim, "json", {
+            encode = vim.json.encode,
+            decode = function()
+              return {
+                ["/my/project"] = { proof_level = "2", options = { 1 } },
+              }
+            end,
+          })
+
+          local state = spark._load_state()
+          assert.same(spark.opts, state)
+        end)
+
+        it("returns defaults when options is not a list", function()
+          local mock_client =
+            common.create_lsp_client({ root_dir = "/my/project" })
+          common.setup_lsp_client(mock_client)
+          package.loaded["ada_ls.utils"] = nil
+
+          os.execute("mkdir -p /tmp/nvim-test-data")
+          local f = io.open(test_state_file, "w")
+          f:write(
+            '{ "/my/project": { "proof_level": 2, "options": { "foo": "bar" } } }'
+          )
+          f:close()
+
+          rawset(vim, "json", {
+            encode = vim.json.encode,
+            decode = function()
+              return {
+                ["/my/project"] = {
+                  proof_level = 2,
+                  options = { foo = "bar" },
+                },
+              }
+            end,
+          })
+          rawset(vim, "islist", function(t)
+            return type(t) == "table" and t[1] ~= nil
+          end)
+
+          local state = spark._load_state()
+          assert.same(spark.opts, state)
+        end)
+
+        it("returns defaults when proof_level is nil", function()
+          local mock_client =
+            common.create_lsp_client({ root_dir = "/my/project" })
+          common.setup_lsp_client(mock_client)
+          package.loaded["ada_ls.utils"] = nil
+
+          os.execute("mkdir -p /tmp/nvim-test-data")
+          local f = io.open(test_state_file, "w")
+          f:write('{ "/my_project": { "options": [1, 2] } }')
+          f:close()
+
+          rawset(vim, "json", {
+            encode = vim.json.encode,
+            decode = function()
+              return { ["/my_project"] = { options = { 1, 2 } } }
+            end,
+          })
+
+          local state = spark._load_state()
+          assert.same(spark.opts, state)
+        end)
+
+        it("returns defaults when options is nil", function()
+          local mock_client =
+            common.create_lsp_client({ root_dir = "/my/project" })
+          common.setup_lsp_client(mock_client)
+          package.loaded["ada_ls.utils"] = nil
+
+          os.execute("mkdir -p /tmp/nvim-test-data")
+          local f = io.open(test_state_file, "w")
+          f:write('{ "/my_project": { "proof_level": 2 } }')
+          f:close()
+
+          rawset(vim, "json", {
+            encode = vim.json.encode,
+            decode = function()
+              return { ["/my_project"] = { proof_level = 2 } }
+            end,
+          })
+
+          local state = spark._load_state()
+          assert.same(spark.opts, state)
+        end)
+
+        after_each(function()
+          vim.json = nil
+          vim.islist = nil
+        end)
       end)
 
       describe("_save_state", function()
@@ -321,6 +426,21 @@ describe("ada_ls.spark", function()
         it("handles empty options", function()
           local args = spark._state_to_args({ proof_level = 1, options = {} })
           assert.same({ "--level=1" }, args)
+        end)
+
+        it("ignores out-of-range option index", function()
+          local args = spark._state_to_args({
+            proof_level = 0,
+            options = { 1, 99 },
+          })
+          assert.equals(2, #args)
+          assert.equals("--level=0", args[1])
+          assert.equals("-j0", args[2])
+        end)
+
+        it("handles nil options in state", function()
+          local args = spark._state_to_args({ proof_level = 2, options = nil })
+          assert.same({ "--level=2" }, args)
         end)
       end)
 
@@ -412,6 +532,7 @@ other.ads:5:1: error: cannot prove precondition
         common.cleanup_packages()
         package.loaded["ada_ls.spark.config"] = nil
         config = require("ada_ls.spark.config")
+        config.setup({})
       end)
 
       describe("M.setup", function()
@@ -479,6 +600,32 @@ other.ads:5:1: error: cannot prove precondition
 
         it("returns false for non-numeric proof_level", function()
           assert.is_false(config._is_valid({ proof_level = "bad" }))
+        end)
+
+        it("returns true with valid string option id", function()
+          assert.is_true(config._is_valid({ options = { "multiprocessing" } }))
+        end)
+
+        it("returns true with valid numeric index", function()
+          assert.is_true(config._is_valid({ options = { 1 } }))
+        end)
+
+        it("returns false for invalid option index", function()
+          assert.is_false(config._is_valid({ options = { 99 } }))
+        end)
+
+        it("returns false for invalid string option", function()
+          assert.is_false(config._is_valid({ options = { "bad_option" } }))
+        end)
+      end)
+
+      describe("_opts_to_ids", function()
+        it("returns id for valid index", function()
+          assert.equals("multiprocessing", config._opts_to_ids(1))
+        end)
+
+        it("returns nil for out of range index", function()
+          assert.is_nil(config._opts_to_ids(99))
         end)
       end)
     end)
@@ -580,6 +727,46 @@ other.ads:5:1: error: cannot prove precondition
           end
         end
         assert.is_true(found_clean)
+      end)
+    end)
+
+    describe("prove_subp", function()
+      it("includes --limit-subp flag in args", function()
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        -- Must set up FULL utils mock BEFORE spark module loads
+        -- Should return mock_client when get_ada_ls is called
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = function() end,
+          get_ada_ls = function()
+            return mock_client
+          end,
+          get_subprogram_name_from_line = function()
+            return "My_Procedure", { 10, 25 }
+          end,
+        })
+
+        spark.prove_subp()
+
+        assert.stub(vim.system).was_called()
+        local call_args = vim.system.calls[1].vals
+        local cmd = call_args[1]
+
+        local found_limit = false
+        for _, arg in ipairs(cmd) do
+          if arg:match("^--limit%-subp=") then
+            found_limit = true
+          end
+        end
+        assert.is_true(found_limit)
       end)
     end)
 

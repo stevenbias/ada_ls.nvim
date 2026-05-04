@@ -228,4 +228,22 @@ function M.fixture_path(filename)
   return "spec/fixtures/" .. filename
 end
 
+function M.symbol(name, start_line, end_line, start_char)
+  return {
+    name = name,
+    range = {
+      start = { line = start_line, character = start_char or 0 },
+      ["end"] = { line = end_line, character = 0 },
+    },
+    selectionRange = {
+      start = { line = start_line, character = start_char or 0 },
+      ["end"] = { line = end_line, character = 0 },
+    },
+  }
+end
+
+function M.mock_symbols(children)
+  return { { children = children } }
+end
+
 return M
