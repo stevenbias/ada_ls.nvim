@@ -65,6 +65,42 @@ function M.get_conf_file()
   return conf_file
 end
 
+function M.get_subprogram_name_from_line(lnum)
+  local symbols = require("ada_ls.lsp_cmd").get_symbols()
+  if not symbols then
+    return nil
+  end
+
+  for _, symbol in ipairs(symbols) do
+    for _, child in ipairs(symbol.children or {}) do
+      local range = child.range or child.selectionRange
+      if
+        range
+        and range.start
+        and range["end"]
+        and range.start.line + 1 == lnum
+      then
+        return child.name
+      elseif
+        range
+        and range.start
+        and range["end"]
+        and range.start.line + 1 < lnum
+        and lnum <= range["end"].line + 1
+      then
+        range = child.selectionRange
+        return child.name,
+          {
+            tonumber(range.start.line + 1),
+            tonumber(range.start.character + 1),
+          }
+      end
+    end
+  end
+
+  return nil
+end
+
 function M.notify_server(method, params)
   local client = M.get_ada_ls()
   if client ~= nil then
