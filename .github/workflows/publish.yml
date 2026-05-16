@@ -2,6 +2,12 @@ name: Publish to LuaRocks
 on:
   pull_request_review:
     types: [submitted]
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: "Release branch name (e.g., release/v0.2.0)"
+        required: true
+        type: string
 permissions:
   contents: write
 jobs:
@@ -9,13 +15,14 @@ jobs:
     name: Bump Version & Publish
     # Only run when PR is approved and comes from a release branch
     if: >-
-      github.event.review.state == 'approved' && github.event.pull_request.base.ref == 'main' && startsWith(github.event.pull_request.head.ref, 'release/')
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.review.state == 'approved' && github.event.pull_request.base.ref == 'main' && startsWith(github.event.pull_request.head.ref, 'release/'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Configure git
@@ -28,7 +35,7 @@ jobs:
         id: check_tag
         run: |
           # Extract expected final version from branch name
-          BRANCH="${{ github.event.pull_request.head.ref }}"
+          BRANCH="${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}"
           FINAL_TAG=$(echo "$BRANCH" | sed 's|release/||')
           echo "final_tag=${FINAL_TAG}" >> "$GITHUB_OUTPUT"
 
@@ -55,7 +62,7 @@ jobs:
       - name: Push changes and tag to release branch
         if: steps.check_tag.outputs.already_tagged == 'false'
         run: |
-          git push origin "${{ github.event.pull_request.head.ref }}" --tags
+          git push origin "${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}" --tags
       - name: Determine tag for LuaRocks
         id: luarocks_tag
         run: |
