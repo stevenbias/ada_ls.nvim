@@ -15,13 +15,13 @@ CONTENTS                                                    *ada_ls-contents*
   6. Commands..............................................|ada_ls-commands|
   7. Configuration.........................................|ada_ls-configuration|
   8. GPR File Support......................................|ada_ls-gpr|
-   9. Snippets..............................................|ada_ls-snippets|
-   10. Statusline Integration................................|ada_ls-statusline|
-   11. Code Actions.........................................|ada_ls-code-actions|
-  11. Files................................................|ada_ls-files|
-  12. Troubleshooting......................................|ada_ls-troubleshooting|
-  13. Contributing.........................................|ada_ls-contributing|
-  14. License..............................................|ada_ls-license|
+  9. Snippets..............................................|ada_ls-snippets|
+  10. Statusline Integration...............................|ada_ls-statusline|
+  11. Code Actions.........................................|ada_ls-code-actions|
+  12. Files................................................|ada_ls-files|
+  13. Troubleshooting......................................|ada_ls-troubleshooting|
+  14. Contributing.........................................|ada_ls-contributing|
+  15. License..............................................|ada_ls-license|
 
 ================================================================================
 INTRODUCTION                                          *ada_ls-introduction*

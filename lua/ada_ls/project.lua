@@ -218,7 +218,7 @@ function M.setup()
 
   local json_path = vim.fs.joinpath(ada_ls_conf_path, ".als.json")
 
-  local group = vim.api.nvim_create_augroup("config_file", { clear = true })
+  local group = vim.api.nvim_create_augroup("AdaLsConfigFile", { clear = true })
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = group,
     pattern = json_path,
