@@ -10,6 +10,7 @@
 :Spark-options	ada_ls.txt	/*:Spark-options*
 :Spark-prove	ada_ls.txt	/*:Spark-prove*
 :Spark-prove_file	ada_ls.txt	/*:Spark-prove_file*
+:Spark-prove_subprogram	ada_ls.txt	/*:Spark-prove_subprogram*
 ada_ls	ada_ls.txt	/*ada_ls*
 ada_ls-checkhealth	ada_ls.txt	/*ada_ls-checkhealth*
 ada_ls-code-actions	ada_ls.txt	/*ada_ls-code-actions*

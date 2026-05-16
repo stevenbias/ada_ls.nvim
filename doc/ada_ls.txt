@@ -168,6 +168,10 @@ COMMANDS                                                  *ada_ls-commands*
     Run gnatprove on the current file only. Results are populated
     in the quickfix list.
 
+:Spark prove_subprogram                                 *:Spark-prove_subprogram*
+    Run gnatprove on the current subprogram only. Results are populated
+    in the quickfix list.
+
 :Spark clean                                                   *:Spark-clean*
     Clean SPARK proof results and intermediate files.
 

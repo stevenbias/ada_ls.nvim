@@ -85,6 +85,7 @@ EOF
 | `:Spark options` | Set proof level and options |
 | `:Spark prove` | Run gnatprove on project |
 | `:Spark prove_file` | Run gnatprove on current file |
+| `:Spark prove_subprogram` | Run gnatprove on current subprogram |
 | `:Spark clean` | Clean proof results |
 
 ### Suggested Keymaps
@@ -100,10 +101,11 @@ vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als other file
 ```
 #### Spark keymaps
 ```lua
-vim.keymap.set("n", "<leader>sp", "<cmd>Spark prove<cr>", { desc = "Spark prove" })
-vim.keymap.set("n", "<leader>sf", "<cmd>Spark prove_file<cr>", { desc = "Spark prove file" })
-vim.keymap.set("n", "<leader>sc", "<cmd>Spark clean<cr>", { desc = "Spark clean" })
-vim.keymap.set("n", "<leader>so", "<cmd>Spark options<cr>", { desc = "Spark options" })
+vim.keymap.set("n", "<leader>sp", "<cmd>Spark prove<cr>", { desc = "Spark prove Project" })
+vim.keymap.set("n", "<leader>sf", "<cmd>Spark prove_file<cr>", { desc = "Spark prove File" })
+vim.keymap.set("n", "<leader>sc", "<cmd>Spark clean<cr>", { desc = "Spark Clean" })
+vim.keymap.set("n", "<leader>so", "<cmd>Spark options<cr>", { desc = "Spark Options" })
+vim.keymap.set("n", "<leader>ss", "<cmd>Spark prove_subprogram<cr>", { desc = "Spark prove Subprogram" })
 ```
 
 ### Removed Default Keymaps
