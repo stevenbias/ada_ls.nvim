@@ -1,3 +1,9 @@
+## v0.2.0-rc.1 (2026-05-16)
+
+### Refactor
+
+- Fix small issues after review
+
 ## v0.2.0-rc.0 (2026-05-16)
 
 ### Feat
