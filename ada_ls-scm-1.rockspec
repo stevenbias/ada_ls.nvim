@@ -8,7 +8,8 @@ source = {
 description = {
   summary = "Neovim plugin for Ada Language Server integration",
   detailed = "Manages .gpr project files, configures gprbuild as :make, "
-    .. "offers a Telescope picker for GPR files, and exposes LSP commands.",
+    .. "offers a Telescope picker for GPR files, and exposes LSP commands, "
+    .. "and integrates SPARK for formal verification.",
   homepage = "https://github.com/stevenbias/ada_ls.nvim",
   license = "MIT",
 }
