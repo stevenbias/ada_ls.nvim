@@ -13,6 +13,7 @@ function M.cleanup_packages()
   package.preload["ada_ls.gpr"] = nil
   package.preload["ada_ls.spark"] = nil
   package.preload["ada_ls.spark.config"] = nil
+  package.preload["ada_ls.lspconfig"] = nil
   -- Then clear loaded modules
   package.loaded["ada_ls"] = nil
   package.loaded["ada_ls.utils"] = nil
@@ -21,6 +22,7 @@ function M.cleanup_packages()
   package.loaded["ada_ls.gpr"] = nil
   package.loaded["ada_ls.spark"] = nil
   package.loaded["ada_ls.spark.config"] = nil
+  package.loaded["ada_ls.lspconfig"] = nil
 end
 
 -- Vim API mocking
@@ -71,6 +73,9 @@ function M.create_vim_fn_mock(overrides)
     filereadable = function()
       return 1
     end,
+    isdirectory = function()
+      return 0
+    end,
   }
 
   if overrides then
@@ -112,6 +117,12 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
   rawset(vim, "defer_fn", stub.new())
   rawset(vim, "uri_from_bufnr", function(_bufnr)
     return "file:///test/path/file.adb"
+  end)
+  rawset(vim, "uri_to_fname", function(uri)
+    if not uri then
+      return nil
+    end
+    return uri:gsub("^file://", "")
   end)
 
   -- Set up vim.islist
@@ -180,10 +191,18 @@ end
 -- LSP client mocking
 function M.create_lsp_client(overrides)
   local base_client = {
-    name = "ada",
+    name = "ada_ls",
     root_dir = "/project/root",
     offset_encoding = "utf-8",
     request_sync = stub.new().returns(nil),
+    request = function(self, method, params, callback)
+      local result = self.request_sync(self, method, params)
+      if result and result.result ~= nil then
+        callback(nil, result.result)
+      else
+        callback(nil, result)
+      end
+    end,
     notify = stub.new(),
     stop = stub.new(),
   }
@@ -204,9 +223,37 @@ function M.setup_lsp_client(client)
 end
 
 -- Get path to fixture files
+function M.setup_vim_health()
+  rawset(vim, "health", {
+    start = stub.new(),
+    ok = stub.new(),
+    warn = stub.new(),
+    error = stub.new(),
+    info = stub.new(),
+  })
+end
+
 function M.fixture_path(filename)
   -- Use pwd-relative path that works with busted
   return "spec/fixtures/" .. filename
+end
+
+function M.symbol(name, start_line, end_line, start_char)
+  return {
+    name = name,
+    range = {
+      start = { line = start_line, character = start_char or 0 },
+      ["end"] = { line = end_line, character = 0 },
+    },
+    selectionRange = {
+      start = { line = start_line, character = start_char or 0 },
+      ["end"] = { line = end_line, character = 0 },
+    },
+  }
+end
+
+function M.mock_symbols(children)
+  return { { children = children } }
 end
 
 return M

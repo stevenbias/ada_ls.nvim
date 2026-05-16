@@ -54,6 +54,12 @@ local function build_args(kind, state)
   elseif kind == "prove_file" then
     table.insert(args, "-u")
     table.insert(args, filename)
+  elseif kind == "prove_subprogram" then
+    local _, pos =
+      require("ada_ls.utils").get_subprogram_name_from_line(vim.fn.line("."))
+    if pos then
+      table.insert(args, "--limit-subp=" .. filename .. ":" .. pos[1])
+    end
   end
 
   return args
@@ -258,14 +264,16 @@ function M.select_options()
   end)
 end
 
--- Prove entire project
 function M.prove()
   run_with_saved_options("prove_project")
 end
 
--- Prove current file
 function M.prove_file()
   run_with_saved_options("prove_file")
+end
+
+function M.prove_subp()
+  run_with_saved_options("prove_subprogram")
 end
 
 -- Clean project for proof

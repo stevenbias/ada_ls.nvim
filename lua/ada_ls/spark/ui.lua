@@ -148,4 +148,9 @@ function M.ask_spark_options(callback)
   end)
 end
 
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._pick_proof_level = pick_proof_level
+  M._pick_additional_options = pick_additional_options
+end
+
 return M

@@ -25,7 +25,7 @@ local function check_executable(cmd, opts)
 end
 
 local function check_lsp_client()
-  local clients = vim.lsp.get_clients({ name = "ada" })
+  local clients = vim.lsp.get_clients({ name = "ada_ls" })
 
   if #clients > 0 then
     local client = clients[1]
@@ -103,7 +103,7 @@ end
 
 function M.check()
   vim.health.start("ada_ls.nvim: Neovim version")
-  if vim.fn.has("nvim-0.10") == 1 then
+  if vim.fn.has("nvim-0.11") == 1 then
     local version = vim.version()
     vim.health.ok(
       string.format(
@@ -115,8 +115,8 @@ function M.check()
     )
   else
     vim.health.error(
-      "Neovim >= 0.10 required",
-      { "Upgrade Neovim to version 0.10 or newer" }
+      "Neovim >= 0.11 required",
+      { "Upgrade Neovim to version 0.11 or newer" }
     )
   end
 
@@ -150,6 +150,17 @@ function M.check()
   vim.health.start("ada_ls.nvim: Project detection")
   check_project_file()
 
+  vim.health.start("ada_ls.nvim: ALS project")
+  local get_server_project = require("ada_ls.utils").get_server_project_name
+  if get_server_project then
+    local server_project = get_server_project()
+    if server_project then
+      vim.health.ok(string.format("ALS project: %s", server_project))
+    else
+      vim.health.info("No ALS project configured")
+    end
+  end
+
   vim.health.start("ada_ls.nvim: Plugin status")
   if vim.g.loaded_ada_ls then
     vim.health.ok("Plugin loaded")
@@ -159,6 +170,13 @@ function M.check()
       "Check that plugin/ada_ls.lua can be found",
     })
   end
+end
+
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._check_executable = check_executable
+  M._check_lsp_client = check_lsp_client
+  M._check_project_file = check_project_file
+  M._check_config = check_config
 end
 
 return M

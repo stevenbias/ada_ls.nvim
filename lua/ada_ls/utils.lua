@@ -1,6 +1,7 @@
 local M = {
   als = nil,
   plugin_name = "Ada_ls",
+  server_project_name = nil,
 }
 
 local LOG_LEVELS = { [0] = "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "OFF" }
@@ -42,7 +43,7 @@ function M.get_ada_ls()
     return M.als
   end
 
-  local clients = vim.lsp.get_clients({ name = "ada" })
+  local clients = vim.lsp.get_clients({ name = "ada_ls" })
   if not clients or #clients == 0 then
     return nil, "Ada LSP client not found"
   else
@@ -65,9 +66,61 @@ function M.get_conf_file()
   return conf_file
 end
 
+function M.get_subprogram_name_from_line(lnum)
+  local symbols = require("ada_ls.lsp_cmd").get_symbols()
+  if not symbols then
+    return nil
+  end
+
+  for _, symbol in ipairs(symbols) do
+    for _, child in ipairs(symbol.children or {}) do
+      local range = child.range or child.selectionRange
+      if
+        range
+        and range.start
+        and range["end"]
+        and range.start.line + 1 == lnum
+      then
+        return child.name
+      elseif
+        range
+        and range.start
+        and range["end"]
+        and range.start.line + 1 < lnum
+        and lnum <= range["end"].line + 1
+      then
+        range = child.selectionRange
+        return child.name,
+          {
+            tonumber(range.start.line + 1),
+            tonumber(range.start.character + 1),
+          }
+      end
+    end
+  end
+
+  return nil
+end
+
+local function set_server_project_name(params)
+  if
+    params
+    and params.settings
+    and params.settings.ada
+    and params.settings.ada.projectFile
+  then
+    M.server_project_name = vim.fs.basename(params.settings.ada.projectFile)
+  end
+end
+
+function M.get_server_project_name()
+  return M.server_project_name
+end
+
 function M.notify_server(method, params)
   local client = M.get_ada_ls()
   if client ~= nil then
+    set_server_project_name(params)
     return client:notify(method, params)
   end
   return false
@@ -75,16 +128,15 @@ end
 
 function M.reset_als_client()
   M.clear()
-  for _, client in pairs(vim.lsp.get_clients({ name = "ada" })) do
-    client:stop(true)
+  for _, client in pairs(vim.lsp.get_clients({ name = "ada_ls" })) do
+    client.stop(client, true)
   end
-  vim.defer_fn(function()
-    vim.cmd("e") -- Reopen buffer to trigger LSP attach
-  end, 100)
+  vim.cmd("e") -- Reopen buffer to trigger LSP attach
 end
 
 function M.clear()
   M.als = nil
+  M.server_project_name = nil
 end
 
 -- Test-specific exports - only exposed in test mode

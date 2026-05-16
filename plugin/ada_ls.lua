@@ -74,6 +74,11 @@ local spark_subcmd_tbl = {
       require("ada_ls.spark").prove_file()
     end,
   },
+  prove_subprogram = {
+    impl = function()
+      require("ada_ls.spark").prove_subp()
+    end,
+  },
   clean = {
     impl = function()
       require("ada_ls.spark").clean()

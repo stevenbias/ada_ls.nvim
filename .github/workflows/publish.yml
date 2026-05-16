@@ -1,0 +1,99 @@
+name: Publish to LuaRocks
+on:
+  pull_request_review:
+    types: [submitted]
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: "Release branch name (e.g., release/v0.2.0)"
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  publish:
+    name: Bump Version & Publish
+    # Only run when PR is approved and comes from a release branch
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.review.state == 'approved' && github.event.pull_request.base.ref == 'main' && startsWith(github.event.pull_request.head.ref, 'release/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Install commitizen
+        run: pip install commitizen
+      - name: Check if final version already tagged
+        id: check_tag
+        run: |
+          # Extract expected final version from branch name
+          BRANCH="${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}"
+          FINAL_TAG=$(echo "$BRANCH" | sed 's|release/||')
+          echo "final_tag=${FINAL_TAG}" >> "$GITHUB_OUTPUT"
+
+          # Check if tag already exists
+          if git rev-parse "$FINAL_TAG" >/dev/null 2>&1; then
+            echo "already_tagged=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${FINAL_TAG} already exists, skipping bump"
+          else
+            echo "already_tagged=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Bump to final version
+        if: steps.check_tag.outputs.already_tagged == 'false'
+        id: bump
+        run: |
+          # cz bump strips the pre-release suffix and produces the final tag
+          # e.g. v0.2.0-rc.0 → v0.2.0
+          cz bump --yes 2>&1 | tee /tmp/cz-bump.log
+
+          # Capture the new version tag
+          VERSION="$(cz version --project)"
+          NEW_TAG="v${VERSION}"
+          echo "new_tag=${NEW_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Bumped to: ${NEW_TAG}"
+      - name: Push changes and tag to release branch
+        if: steps.check_tag.outputs.already_tagged == 'false'
+        run: |
+          git push origin "${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}" --tags
+      - name: Determine tag for LuaRocks
+        id: luarocks_tag
+        run: |
+          if [ "${{ steps.check_tag.outputs.already_tagged }}" == "true" ]; then
+            echo "tag=${{ steps.check_tag.outputs.final_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ steps.bump.outputs.new_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish to LuaRocks
+        uses: nvim-neorocks/luarocks-tag-release@v7
+        continue-on-error: true
+        env:
+          LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
+        with:
+          version: ${{ steps.luarocks_tag.outputs.tag }}
+          name: ada_ls.nvim
+          dependencies: |
+            telescope.nvim
+            lua >= 5.1
+          test_dependencies: |
+            busted
+            nlua
+          copy_directories: |
+            {{ neovim.plugin.dirs }}
+          labels: |
+            neovim
+            ada
+            lsp
+            spark
+          summary: "Neovim plugin for Ada Language Server integration"
+          detailed_description: |
+            Manages .gpr project files, configures gprbuild as :make,
+            offers a Telescope picker for GPR files, and exposes LSP commands.
+          license: "MIT"
