@@ -112,7 +112,7 @@ This plugin removes the following useless default Ada keymaps:
 
 | Keymap | Mode | Description |
 |--------|------|-------------|
-| `<leader>aj` | insert, normal | Removed |
+| `<leader>aj` | normal | Removed |
 | `<leader>al` | insert | Removed |
 
 ## GPR File Support
