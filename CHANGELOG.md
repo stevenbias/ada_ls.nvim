@@ -1,3 +1,39 @@
+## v0.2.0-rc.0 (2026-05-16)
+
+### Feat
+
+- Fix default ada keymap deletion
+- Add utils function to get project config sent to ALS
+- Add a Spark cmd to prove subprogram from cursor position
+- Add utils function to get subpr info from a line
+- Filter lsp handler to ada_ls
+- Fix some lsp req/cmd
+- Set send_request and send_command public in order to be usable by other modules
+- Add check for SPARK options index range
+- on_detach is not part of vim.lsp.config parameter
+- Remove empty last line created after package body generation
+- Handle generation and update package body from code action
+- Fix bug to update package body in nvim version 0.12
+- ALS support out of the box
+- Add ALS config for gpr file
+- Distinguish gpr filetype to ada filetype
+- Add VSCode snippets support
+- Add vscode snippets from "version": "2026.1.202601121"
+- Add same lsp capabilities as in vscode
+- Add handler to have package generation suggestion in code action
+
+### Refactor
+
+- send_request and send_command are now async
+- Avoid redundant reading to als config file
+- Modif after review
+- Split lsp config in two files
+- Cleanup
+- Fix als reload after opening the generated package body
+- Fix warning after reloading plugin
+- WIP update make cmd after writing the json config file
+- als config
+
 ## v0.1.0 (2026-03-20)
 
 ## v0.1.0-rc.4 (2026-03-20)
