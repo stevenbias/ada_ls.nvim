@@ -223,6 +223,16 @@ function M.setup_lsp_client(client)
 end
 
 -- Get path to fixture files
+function M.setup_vim_health()
+  rawset(vim, "health", {
+    start = stub.new(),
+    ok = stub.new(),
+    warn = stub.new(),
+    error = stub.new(),
+    info = stub.new(),
+  })
+end
+
 function M.fixture_path(filename)
   -- Use pwd-relative path that works with busted
   return "spec/fixtures/" .. filename

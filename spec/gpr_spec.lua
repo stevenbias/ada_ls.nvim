@@ -273,6 +273,21 @@ describe("ada_ls.gpr", function()
         assert.matches("-XDEBUG=true", result)
       end)
 
+      it("reads from config file when json_config not provided", function()
+        local mock_client =
+          common.create_lsp_client({ root_dir = "/project/root" })
+        common.setup_lsp_client(mock_client)
+        project_mock.decode_json_config = function()
+          return "/project/test.gpr", " -XMODE=release"
+        end
+
+        local result = gpr._gprbuild_cmd(nil)
+
+        assert.is_string(result)
+        assert.matches("/project/test.gpr", result)
+        assert.matches("-XMODE=release", result)
+      end)
+
       it("uses json_config parameter directly", function()
         local mock_client =
           common.create_lsp_client({ root_dir = "/project/root" })

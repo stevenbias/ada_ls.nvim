@@ -161,4 +161,11 @@ function M.check()
   end
 end
 
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._check_executable = check_executable
+  M._check_lsp_client = check_lsp_client
+  M._check_project_file = check_project_file
+  M._check_config = check_config
+end
+
 return M

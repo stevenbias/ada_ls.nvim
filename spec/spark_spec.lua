@@ -340,6 +340,28 @@ describe("ada_ls.spark", function()
           assert.same(spark.opts, state)
         end)
 
+        it("returns defaults when decoded value is not a table", function()
+          local mock_client =
+            common.create_lsp_client({ root_dir = "/my/project" })
+          common.setup_lsp_client(mock_client)
+          package.loaded["ada_ls.utils"] = nil
+
+          os.execute("mkdir -p /tmp/nvim-test-data")
+          local f = io.open(test_state_file, "w")
+          f:write('"just a string"')
+          f:close()
+
+          rawset(vim, "json", {
+            encode = vim.json.encode,
+            decode = function()
+              return "just a string"
+            end,
+          })
+
+          local state = spark._load_state()
+          assert.same(spark.opts, state)
+        end)
+
         after_each(function()
           vim.json = nil
           vim.islist = nil
@@ -629,6 +651,180 @@ other.ads:5:1: error: cannot prove precondition
         end)
       end)
     end)
+
+    describe("ada_ls.spark.ui", function()
+      local ui
+
+      before_each(function()
+        common.cleanup_packages()
+        package.loaded["ada_ls.spark.ui"] = nil
+      end)
+
+      describe("_pick_proof_level", function()
+        before_each(function()
+          ui = require("ada_ls.spark.ui")
+          rawset(vim, "fn", {
+            inputlist = stub.new().returns(0),
+            len = function(t)
+              return #t
+            end,
+          })
+        end)
+
+        after_each(function()
+          vim.fn = nil
+        end)
+
+        it("calls callback with selected index", function()
+          local result = nil
+          ui._pick_proof_level(0, function(r)
+            result = r
+          end)
+          assert.equals(0, result)
+        end)
+
+        it("uses current_level when inputlist returns negative", function()
+          vim.fn.inputlist = stub.new().returns(-1)
+          local result = nil
+          ui._pick_proof_level(2, function(r)
+            result = r
+          end)
+          assert.equals(2, result)
+        end)
+
+        it("uses current_level when inputlist returns out of range", function()
+          vim.fn.inputlist = stub.new().returns(99)
+          local result = nil
+          ui._pick_proof_level(1, function(r)
+            result = r
+          end)
+          assert.equals(1, result)
+        end)
+
+        it("builds items with correct prefix for current level", function()
+          vim.fn.inputlist = stub.new().returns(2)
+          ui._pick_proof_level(2, function() end)
+          assert.stub(vim.fn.inputlist).was_called()
+          local call_args = vim.fn.inputlist.calls[1].vals
+          assert.is_table(call_args[1])
+          assert.equals("Select proof level:", call_args[1][1])
+          local items = call_args[1][2]
+          assert.matches("%● 2 ", items)
+        end)
+      end)
+
+      describe("_pick_additional_options", function()
+        local captured_keymaps
+
+        before_each(function()
+          captured_keymaps = {}
+          rawset(vim, "o", { lines = 100, columns = 200 })
+          rawset(vim, "api", {
+            nvim_create_buf = stub.new().returns(1),
+            nvim_buf_set_lines = stub.new(),
+            nvim_open_win = stub.new().returns(2),
+            nvim_win_set_cursor = stub.new(),
+            nvim_win_get_cursor = stub.new().returns({ 3, 0 }),
+            nvim_win_close = stub.new(),
+            nvim_create_autocmd = stub.new(),
+            nvim__get_runtime = function()
+              return {}
+            end,
+          })
+          local bo = {}
+          setmetatable(bo, {
+            __index = function()
+              return {}
+            end,
+            __newindex = function() end,
+          })
+          rawset(vim, "bo", bo)
+          rawset(vim, "keymap", {
+            set = function(_, key, fn, _)
+              captured_keymaps[key] = fn
+            end,
+          })
+          ui = require("ada_ls.spark.ui")
+        end)
+
+        it("creates floating buffer with correct content", function()
+          ui._pick_additional_options({ 1 }, function() end)
+
+          assert.stub(vim.api.nvim_create_buf).was_called()
+          assert.stub(vim.api.nvim_buf_set_lines).was_called()
+          assert.stub(vim.api.nvim_open_win).was_called()
+        end)
+
+        it("sets up keymaps for Tab, CR, q, Esc", function()
+          ui._pick_additional_options({ 1 }, function() end)
+
+          assert.is_function(captured_keymaps["<Tab>"])
+          assert.is_function(captured_keymaps["<CR>"])
+          assert.is_function(captured_keymaps["q"])
+          assert.is_function(captured_keymaps["<Esc>"])
+        end)
+
+        it("calls callback with selected indices on confirm", function()
+          local result = nil
+          ui._pick_additional_options({ 1, 3 }, function(r)
+            result = r
+          end)
+
+          -- Toggle option 2 (row 4 = header + option 2)
+          vim.api.nvim_win_get_cursor = stub.new().returns({ 4, 0 })
+          captured_keymaps["<Tab>"]()
+
+          -- Confirm
+          captured_keymaps["<CR>"]()
+
+          assert.same({ 1, 2, 3 }, result)
+        end)
+
+        it("calls callback with nil on cancel via q", function()
+          local result = "not_called"
+          ui._pick_additional_options({ 1 }, function(r)
+            result = r
+          end)
+
+          captured_keymaps["q"]()
+
+          assert.is_nil(result)
+        end)
+
+        it("calls callback with nil on cancel via Esc", function()
+          local result = "not_called"
+          ui._pick_additional_options({ 1 }, function(r)
+            result = r
+          end)
+
+          captured_keymaps["<Esc>"]()
+
+          assert.is_nil(result)
+        end)
+
+        it("tracks current_options in selected state", function()
+          local result = nil
+          ui._pick_additional_options({ 2, 4 }, function(r)
+            result = r
+          end)
+
+          captured_keymaps["<CR>"]()
+
+          assert.same({ 2, 4 }, result)
+        end)
+
+        it("returns empty when no options selected", function()
+          local result = nil
+          ui._pick_additional_options({}, function(r)
+            result = r
+          end)
+
+          captured_keymaps["<CR>"]()
+
+          assert.same({}, result)
+        end)
+      end)
+    end)
   end
 
   describe("public API", function()
@@ -767,6 +963,188 @@ other.ads:5:1: error: cannot prove precondition
           end
         end
         assert.is_true(found_limit)
+      end)
+    end)
+
+    describe("gnatprove async callbacks", function()
+      it("notifies success when gnatprove returns code 0", function()
+        local captured_callback
+        rawset(vim, "system", function(_cmd, _opts, callback)
+          captured_callback = callback
+        end)
+
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.is_function(captured_callback)
+        captured_callback({ code = 0, stdout = "", stderr = "" })
+
+        local found = false
+        for _, call in ipairs(vim.notify.calls) do
+          if call.vals[1] and call.vals[1]:match("completed successfully") then
+            found = true
+            break
+          end
+        end
+        assert.is_true(found)
+      end)
+
+      it("notifies warning when gnatprove returns non-zero", function()
+        local captured_callback
+        rawset(vim, "system", function(_cmd, _opts, callback)
+          captured_callback = callback
+        end)
+
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.is_function(captured_callback)
+        captured_callback({ code = 1, stdout = "", stderr = "error" })
+
+        local found = false
+        for _, call in ipairs(vim.notify.calls) do
+          if call.vals[1] and call.vals[1]:match("completed with errors") then
+            found = true
+            break
+          end
+        end
+        assert.is_true(found)
+      end)
+
+      it("populates quickfix from gnatprove output on callback", function()
+        local captured_callback
+        rawset(vim, "system", function(_cmd, _opts, callback)
+          captured_callback = callback
+        end)
+
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.is_function(captured_callback)
+        captured_callback({
+          code = 1,
+          stdout = "main.adb:10:5: medium: overflow check\n",
+          stderr = "",
+        })
+
+        assert.stub(vim.fn.setqflist).was_called()
+      end)
+
+      it("closes quickfix when no gnatprove output", function()
+        local captured_callback
+        rawset(vim, "system", function(_cmd, _opts, callback)
+          captured_callback = callback
+        end)
+
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.is_function(captured_callback)
+        captured_callback({ code = 0, stdout = "", stderr = "" })
+
+        assert.stub(vim.cmd).was_called_with("cclose")
+      end)
+
+      it("calls vim.notify via stdout callback", function()
+        local captured_opts
+        rawset(vim, "system", function(_cmd, opts, _callback)
+          captured_opts = opts
+        end)
+
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.is_table(captured_opts)
+        assert.is_function(captured_opts.stdout)
+
+        captured_opts.stdout()
+
+        assert.stub(vim.notify).was_called()
+        local found = false
+        for _, call in ipairs(vim.notify.calls) do
+          if call.vals[1] and call.vals[1]:match("running") then
+            found = true
+            break
+          end
+        end
+        assert.is_true(found)
+      end)
+    end)
+
+    describe("setup", function()
+      it("calls spark.config.setup when spark key present in opts", function()
+        package.loaded["ada_ls.spark"] = nil
+        package.loaded["ada_ls.spark.config"] = nil
+
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.setup({ spark = { proof_level = 3 } })
+
+        assert.equals(3, fresh_spark.opts.proof_level)
+      end)
+
+      it("uses defaults when spark key is nil", function()
+        package.loaded["ada_ls.spark"] = nil
+        package.loaded["ada_ls.spark.config"] = nil
+
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.setup({})
+
+        assert.equals(0, fresh_spark.opts.proof_level)
+      end)
+
+      it("uses defaults when opts is nil", function()
+        package.loaded["ada_ls.spark"] = nil
+        package.loaded["ada_ls.spark.config"] = nil
+
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.setup(nil)
+
+        assert.equals(0, fresh_spark.opts.proof_level)
       end)
     end)
 

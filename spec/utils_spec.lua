@@ -143,6 +143,16 @@ describe("ada_ls.utils", function()
       local result = utils.get_conf_file()
       assert.equals("/project/root/.als.json", result)
     end)
+
+    it("returns nil when .als.json is not readable", function()
+      local mock_client =
+        common.create_lsp_client({ root_dir = "/project/root" })
+      common.setup_lsp_client(mock_client)
+      vim.fn.filereadable = stub.new().returns(0)
+
+      local result = utils.get_conf_file()
+      assert.is_nil(result)
+    end)
   end)
 
   describe("notify_server", function()
@@ -254,6 +264,27 @@ describe("ada_ls.utils", function()
 
       assert.stub(mock_client.stop).was_called()
       assert.stub(vim.cmd).was_called_with("e")
+    end)
+  end)
+
+  describe("get_server_project_name", function()
+    it("returns nil by default", function()
+      assert.is_nil(utils.get_server_project_name())
+    end)
+
+    it("returns project name after notify_server with projectFile", function()
+      local mock_client = common.create_lsp_client()
+      common.setup_lsp_client(mock_client)
+
+      utils.notify_server("workspace/didChangeConfiguration", {
+        settings = {
+          ada = {
+            projectFile = "/project/test.gpr",
+          },
+        },
+      })
+
+      assert.equals("test.gpr", utils.get_server_project_name())
     end)
   end)
 end)
