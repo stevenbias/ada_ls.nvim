@@ -223,7 +223,8 @@ function M.setup()
     group = group,
     pattern = json_path,
     callback = function()
-      require("ada_ls.gpr").makeprg_setup()
+      local _, _, json_config = M.decode_json_config(json_path)
+      require("ada_ls.gpr").makeprg_setup(json_config)
     end,
   })
 

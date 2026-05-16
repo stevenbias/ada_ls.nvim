@@ -1,6 +1,7 @@
 local M = {
   als = nil,
   plugin_name = "Ada_ls",
+  server_project_name = nil,
 }
 
 local LOG_LEVELS = { [0] = "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "OFF" }
@@ -101,9 +102,25 @@ function M.get_subprogram_name_from_line(lnum)
   return nil
 end
 
+local function set_server_project_name(params)
+  if
+    params
+    and params.settings
+    and params.settings.ada
+    and params.settings.ada.projectFile
+  then
+    M.server_project_name = vim.fs.basename(params.settings.ada.projectFile)
+  end
+end
+
+function M.get_server_project_name()
+  return M.server_project_name
+end
+
 function M.notify_server(method, params)
   local client = M.get_ada_ls()
   if client ~= nil then
+    set_server_project_name(params)
     return client:notify(method, params)
   end
   return false
@@ -119,6 +136,7 @@ end
 
 function M.clear()
   M.als = nil
+  M.server_project_name = nil
 end
 
 -- Test-specific exports - only exposed in test mode
