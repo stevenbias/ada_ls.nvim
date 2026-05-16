@@ -150,6 +150,17 @@ function M.check()
   vim.health.start("ada_ls.nvim: Project detection")
   check_project_file()
 
+  vim.health.start("ada_ls.nvim: ALS project")
+  local get_server_project = require("ada_ls.utils").get_server_project_name
+  if get_server_project then
+    local server_project = get_server_project()
+    if server_project then
+      vim.health.ok(string.format("ALS project: %s", server_project))
+    else
+      vim.health.info("No ALS project configured")
+    end
+  end
+
   vim.health.start("ada_ls.nvim: Plugin status")
   if vim.g.loaded_ada_ls then
     vim.health.ok("Plugin loaded")

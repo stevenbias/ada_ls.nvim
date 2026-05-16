@@ -15,8 +15,9 @@ CONTENTS                                                    *ada_ls-contents*
   6. Commands..............................................|ada_ls-commands|
   7. Configuration.........................................|ada_ls-configuration|
   8. GPR File Support......................................|ada_ls-gpr|
-  9. Snippets..............................................|ada_ls-snippets|
-  10. Code Actions.........................................|ada_ls-code-actions|
+   9. Snippets..............................................|ada_ls-snippets|
+   10. Statusline Integration................................|ada_ls-statusline|
+   11. Code Actions.........................................|ada_ls-code-actions|
   11. Files................................................|ada_ls-files|
   12. Troubleshooting......................................|ada_ls-troubleshooting|
   13. Contributing.........................................|ada_ls-contributing|
@@ -257,6 +258,28 @@ Snippet files are located in `lua/ada_ls/snippets/`:
 
 No configuration is needed. If LuaSnip is not installed, snippets are
 silently skipped.
+
+================================================================================
+STATUSLINE INTEGRATION                              *ada_ls-statusline*
+
+get_server_project_name()                     *ada_ls.utils.get_server_project_name()*
+    Returns the current GPR project file as known by the Ada Language Server,
+    or nil if no project is configured.
+
+    The value is set when the plugin sends the project file path to
+    the ALS via workspace/didChangeConfiguration.
+
+    Example (lualine): >lua
+        {
+          function()
+            local name = require("ada_ls.utils").get_server_project_name()
+            return name and ("GPR: " .. name) or ""
+          end,
+          cond = function()
+            return vim.bo.filetype == "ada"
+          end,
+        }
+<
 
 ================================================================================
 CODE ACTIONS                                          *ada_ls-code-actions*

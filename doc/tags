@@ -30,5 +30,7 @@ ada_ls-quickstart	ada_ls.txt	/*ada_ls-quickstart*
 ada_ls-requirements	ada_ls.txt	/*ada_ls-requirements*
 ada_ls-root-dir	ada_ls.txt	/*ada_ls-root-dir*
 ada_ls-snippets	ada_ls.txt	/*ada_ls-snippets*
+ada_ls-statusline	ada_ls.txt	/*ada_ls-statusline*
 ada_ls-troubleshooting	ada_ls.txt	/*ada_ls-troubleshooting*
 ada_ls.setup()	ada_ls.txt	/*ada_ls.setup()*
+ada_ls.utils.get_server_project_name()	ada_ls.txt	/*ada_ls.utils.get_server_project_name()*
