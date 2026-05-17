@@ -1,18 +1,22 @@
 name: Release
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
+  workflow_run:
+    workflows: [Publish to LuaRocks]
+    types: [completed]
 permissions:
   contents: write
 jobs:
   release:
     name: Create Release & Cleanup
-    # Only run when PR is merged and comes from a release branch
-    if: >-
-      github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/')
     runs-on: ubuntu-latest
     steps:
+      - name: Validate release branch
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          if [[ ! "$BRANCH" =~ ^release/ ]]; then
+            echo "Not a release branch ($BRANCH), skipping release"
+            exit 78
+          fi
       - name: Checkout main
         uses: actions/checkout@v4
         with:
@@ -23,12 +27,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-      - name: Extract version from release branch
+      - name: Extract version
         id: version
         run: |
-          RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
-          # Extract version: release/v0.2.0 → v0.2.0
-          FINAL_TAG=$(echo "$RELEASE_BRANCH" | sed 's|release/||')
+          RELEASE_BRANCH="${{ github.event.workflow_run.head_branch }}"
+          FINAL_TAG="${RELEASE_BRANCH#release/}"
           echo "final_tag=${FINAL_TAG}" >> "$GITHUB_OUTPUT"
           echo "release_branch=${RELEASE_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "Final tag: ${FINAL_TAG}"
@@ -36,7 +39,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Check if release already exists (idempotency)
           if gh release view "${{ steps.version.outputs.final_tag }}" >/dev/null 2>&1; then
             echo "Release ${{ steps.version.outputs.final_tag }} already exists, skipping creation"
           else
