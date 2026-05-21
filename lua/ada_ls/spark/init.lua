@@ -58,7 +58,7 @@ local function build_args(kind, state)
     local _, pos =
       require("ada_ls.utils").get_subprogram_name_from_line(vim.fn.line("."))
     if pos then
-      table.insert(args, "--limit-subp=" .. filename .. ":" .. pos[1])
+      table.insert(args, "--limit-subp=" .. filename .. ":" .. pos.start.line)
     end
   end
 

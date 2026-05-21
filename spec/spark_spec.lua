@@ -946,7 +946,11 @@ other.ads:5:1: error: cannot prove precondition
             return mock_client
           end,
           get_subprogram_name_from_line = function()
-            return "My_Procedure", { 10, 25 }
+            return "My_Procedure",
+              {
+                start = { line = 10, character = 1 },
+                end_ = { line = 25, character = 1 },
+              }
           end,
         })
 

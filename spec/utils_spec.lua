@@ -242,7 +242,10 @@ describe("ada_ls.utils", function()
       }))
       local name, pos = utils.get_subprogram_name_from_line(4)
       assert.equals("My_Procedure", name)
-      assert.same({ 2, 5 }, pos)
+      assert.same({
+        start = { line = 2, character = 5 },
+        end_ = { line = 7, character = 1 },
+      }, pos)
     end)
 
     it("returns nil when no symbols match line", function()

@@ -79,21 +79,19 @@ function M.get_subprogram_name_from_line(lnum)
         range
         and range.start
         and range["end"]
-        and range.start.line + 1 == lnum
-      then
-        return child.name
-      elseif
-        range
-        and range.start
-        and range["end"]
-        and range.start.line + 1 < lnum
+        and range.start.line + 1 <= lnum
         and lnum <= range["end"].line + 1
       then
-        range = child.selectionRange
         return child.name,
           {
-            tonumber(range.start.line + 1),
-            tonumber(range.start.character + 1),
+            start = {
+              line = tonumber(range.start.line + 1),
+              character = tonumber(range.start.character + 1),
+            },
+            end_ = {
+              line = tonumber(range["end"].line + 1),
+              character = tonumber(range["end"].character + 1),
+            },
           }
       end
     end

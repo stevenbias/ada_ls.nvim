@@ -70,7 +70,7 @@ end
 
 function M.get_prj_file()
   local prj_file = M.send_command("als-project-file")
-  if not prj_file then
+  if not prj_file or prj_file == "" then
     return nil, "No project file found"
   end
   return prj_file
