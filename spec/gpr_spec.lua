@@ -142,7 +142,7 @@ describe("ada_ls.gpr", function()
   end)
 
   describe("makeprg_setup", function()
-    it("sets vim.o.makeprg when config is valid", function()
+    it("sets vim.bo.makeprg when config is valid", function()
       local mock_client =
         common.create_lsp_client({ root_dir = "/project/root" })
       common.setup_lsp_client(mock_client)
@@ -152,13 +152,13 @@ describe("ada_ls.gpr", function()
 
       gpr.makeprg_setup()
 
-      assert.is_string(vim.o.makeprg)
-      assert.matches("gprbuild", vim.o.makeprg)
-      assert.matches("-P", vim.o.makeprg)
-      assert.matches("my_project.gpr", vim.o.makeprg)
+      assert.is_string(vim.bo.makeprg)
+      assert.matches("gprbuild", vim.bo.makeprg)
+      assert.matches("-P", vim.bo.makeprg)
+      assert.matches("my_project.gpr", vim.bo.makeprg)
     end)
 
-    it("sets vim.o.errorformat with all gprbuild patterns", function()
+    it("sets vim.bo.errorformat with all gprbuild patterns", function()
       local mock_client =
         common.create_lsp_client({ root_dir = "/project/root" })
       common.setup_lsp_client(mock_client)
@@ -168,20 +168,20 @@ describe("ada_ls.gpr", function()
 
       gpr.makeprg_setup()
 
-      assert.is_string(vim.o.errorformat)
-      assert.matches("%%f:%%l:%%c:", vim.o.errorformat)
-      assert.matches("%%f:%%l:", vim.o.errorformat)
-      assert.matches("%%*", vim.o.errorformat)
-      assert.matches("%-G", vim.o.errorformat)
+      assert.is_string(vim.bo.errorformat)
+      assert.matches("%%f:%%l:%%c:", vim.bo.errorformat)
+      assert.matches("%%f:%%l:", vim.bo.errorformat)
+      assert.matches("%%*", vim.bo.errorformat)
+      assert.matches("%-G", vim.bo.errorformat)
     end)
 
     it("returns early when gprbuild_cmd returns nil", function()
       vim.lsp.get_clients = stub.new().returns({})
-      vim.o.makeprg = nil
+      vim.bo.makeprg = nil
 
       gpr.makeprg_setup()
 
-      assert.is_nil(vim.o.makeprg)
+      assert.is_nil(vim.bo.makeprg)
     end)
 
     it("uses json_config parameter directly when provided", function()
@@ -198,12 +198,12 @@ describe("ada_ls.gpr", function()
       }
       gpr.makeprg_setup(json_config)
 
-      assert.is_string(vim.o.makeprg)
-      assert.matches("gprbuild", vim.o.makeprg)
-      assert.matches("-P", vim.o.makeprg)
-      assert.matches("my_project.gpr", vim.o.makeprg)
-      assert.matches("-XMODE=debug", vim.o.makeprg)
-      assert.matches("-XARCH=x86_64", vim.o.makeprg)
+      assert.is_string(vim.bo.makeprg)
+      assert.matches("gprbuild", vim.bo.makeprg)
+      assert.matches("-P", vim.bo.makeprg)
+      assert.matches("my_project.gpr", vim.bo.makeprg)
+      assert.matches("-XMODE=debug", vim.bo.makeprg)
+      assert.matches("-XARCH=x86_64", vim.bo.makeprg)
     end)
 
     it("excludes -X vars when scenarioVariables is empty", function()
@@ -217,9 +217,9 @@ describe("ada_ls.gpr", function()
       }
       gpr.makeprg_setup(json_config)
 
-      assert.is_string(vim.o.makeprg)
-      assert.matches("gprbuild", vim.o.makeprg)
-      assert.not_matches("%-X", vim.o.makeprg)
+      assert.is_string(vim.bo.makeprg)
+      assert.matches("gprbuild", vim.bo.makeprg)
+      assert.not_matches("%-X", vim.bo.makeprg)
     end)
   end)
 

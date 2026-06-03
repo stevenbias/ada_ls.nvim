@@ -61,7 +61,6 @@ function M.makeprg_setup(json_config)
   if cmd == nil then
     return
   end
-  vim.o.makeprg = cmd
 
   local err_format = table.concat({
     "%f:%l:%c: %t%*[^:]: %m",
@@ -72,7 +71,18 @@ function M.makeprg_setup(json_config)
     "%*[^:]: %f:%l: %m",
     "%-G%.%#",
   }, ",")
-  vim.o.errorformat = err_format
+
+  vim.api.nvim_create_autocmd("BufEnter", {
+    group = vim.api.nvim_create_augroup("AdaMakeCmd", { clear = true }),
+    pattern = { "*.ad[bs]" },
+    callback = function()
+      vim.bo.makeprg = cmd
+      vim.bo.errorformat = err_format
+    end,
+  })
+
+  vim.bo.makeprg = cmd
+  vim.bo.errorformat = err_format
 end
 
 if os.getenv("ADA_LS_TEST_MODE") then

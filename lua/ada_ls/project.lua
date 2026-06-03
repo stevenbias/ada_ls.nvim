@@ -52,7 +52,7 @@ local function save_new_configuration(root_dir, config)
   file:write(vim.json.encode(config))
   file:close()
 
-  require("ada_ls.gpr").makeprg_setup()
+  require("ada_ls.gpr").makeprg_setup(config)
 end
 
 local function set_scenario_var()
