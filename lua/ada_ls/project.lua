@@ -42,7 +42,7 @@ local function save_new_configuration(root_dir, config)
 
   local file = io.open(json_path, "w+")
   if not file then
-    vim.notify_once(
+    require("ada_ls.utils").notify(
       "Could not save Ada_ls configuration at " .. json_path,
       vim.log.levels.ERROR
     )
@@ -99,7 +99,7 @@ local function set_scenario_var()
 end
 
 local function create_config(config)
-  config["projectFile"] = M.project_file
+  config["projectFile"] = vim.fs.basename(M.project_file)
   if next(M.scenario_variables) ~= nil then
     config["scenarioVariables"] = M.scenario_variables
   end
@@ -141,7 +141,7 @@ function M.pick_gpr_file()
   local files_number = #files
 
   if files_number == 0 then
-    vim.notify_once(
+    utils.notify(
       "No Ada project files found in the current directory.",
       vim.log.levels.WARN
     )
@@ -243,10 +243,6 @@ function M.setup()
 
   notify_configuration_change(json_config)
   require("ada_ls.gpr").makeprg_setup(json_config)
-  vim.notify_once(
-    "Configuration loaded from " .. ada_ls_conf_path,
-    vim.log.levels.INFO
-  )
   M.is_setup = true
 end
 
