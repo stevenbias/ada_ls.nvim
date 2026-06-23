@@ -10,7 +10,7 @@ function M.cleanup_packages()
   package.preload["ada_ls.utils"] = nil
   package.preload["ada_ls.lsp_cmd"] = nil
   package.preload["ada_ls.project"] = nil
-  package.preload["ada_ls.gpr"] = nil
+  package.preload["ada_ls.gprtools"] = nil
   package.preload["ada_ls.spark"] = nil
   package.preload["ada_ls.spark.config"] = nil
   package.preload["ada_ls.lspconfig"] = nil
@@ -19,7 +19,7 @@ function M.cleanup_packages()
   package.loaded["ada_ls.utils"] = nil
   package.loaded["ada_ls.lsp_cmd"] = nil
   package.loaded["ada_ls.project"] = nil
-  package.loaded["ada_ls.gpr"] = nil
+  package.loaded["ada_ls.gprtools"] = nil
   package.loaded["ada_ls.spark"] = nil
   package.loaded["ada_ls.spark.config"] = nil
   package.loaded["ada_ls.lspconfig"] = nil

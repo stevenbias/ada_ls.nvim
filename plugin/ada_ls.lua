@@ -22,7 +22,7 @@ local als_subcmd_tbl = {
   },
   clean = {
     impl = function()
-      require("ada_ls.gpr").clean()
+      require("ada_ls.gprtools").clean()
     end,
   },
   config = {

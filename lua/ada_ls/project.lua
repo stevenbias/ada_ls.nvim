@@ -52,7 +52,7 @@ local function save_new_configuration(root_dir, config)
   file:write(vim.json.encode(config))
   file:close()
 
-  require("ada_ls.gpr").makeprg_setup(config)
+  require("ada_ls.gprtools").makeprg_setup(config)
 end
 
 local function set_scenario_var()
@@ -224,7 +224,7 @@ function M.setup()
     pattern = json_path,
     callback = function()
       local _, _, json_config = M.decode_json_config(json_path)
-      require("ada_ls.gpr").makeprg_setup(json_config)
+      require("ada_ls.gprtools").makeprg_setup(json_config)
     end,
   })
 
@@ -242,7 +242,7 @@ function M.setup()
   end
 
   notify_configuration_change(json_config)
-  require("ada_ls.gpr").makeprg_setup(json_config)
+  require("ada_ls.gprtools").makeprg_setup(json_config)
   M.is_setup = true
 end
 
