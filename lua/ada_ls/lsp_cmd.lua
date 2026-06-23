@@ -1,6 +1,6 @@
 local M = {}
 
-function M.send_request(req)
+function M.send_request(req, timeout)
   local utils = require("ada_ls.utils")
   local client = utils.get_ada_ls()
   if not client then
@@ -13,7 +13,7 @@ function M.send_request(req)
     err = e
     result = r
   end)
-  vim.wait(2000, function()
+  vim.wait(timeout or 200, function()
     return result ~= nil or err ~= nil
   end)
 
@@ -24,7 +24,7 @@ function M.send_request(req)
   return vim.islist(result) and result or { result }
 end
 
-function M.send_command(cmd, args)
+function M.send_command(cmd, args, timeout)
   local utils = require("ada_ls.utils")
   local client = utils.get_ada_ls()
   if not client then
@@ -40,7 +40,7 @@ function M.send_command(cmd, args)
     err = e
     result = r
   end)
-  vim.wait(2000, function()
+  vim.wait(timeout or 300, function()
     return result ~= nil or err ~= nil
   end)
 
@@ -90,7 +90,7 @@ end
 
 function M.go_to_other()
   local arg = { uri = vim.uri_from_bufnr(0) }
-  return M.send_command("als-other-file", arg)
+  return M.send_command("als-other-file", arg, 0)
 end
 
 function M.get_src_dirs()
@@ -98,7 +98,7 @@ function M.get_src_dirs()
 end
 
 function M.get_obj_dir()
-  return M.send_command("als-object-dir")
+  return M.send_command("als-object-dir", nil, 1500)
 end
 
 return M
