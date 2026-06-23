@@ -39,17 +39,23 @@ function M.get_bufdir()
 end
 
 function M.get_ada_ls()
-  if M.als ~= nil then
-    return M.als
+  local bufid = M.get_bufid()
+  local ls_name = "ada_ls"
+
+  local clients = vim.lsp.get_clients({ bufnr = bufid, name = ls_name })
+
+  if not clients or #clients == 0 then
+    -- check if there is an ada language client configured for gpr
+    ls_name = "gpr_ls"
+    clients = vim.lsp.get_clients({ bufnr = bufid, name = ls_name })
+
+    if not clients or #clients == 0 then
+      return nil, "Ada LSP client not found"
+    end
   end
 
-  local clients = vim.lsp.get_clients({ name = "ada_ls" })
-  if not clients or #clients == 0 then
-    return nil, "Ada LSP client not found"
-  else
-    M.als = clients[1]
-    return M.als
-  end
+  M.als = clients[1]
+  return M.als
 end
 
 function M.get_conf_file()

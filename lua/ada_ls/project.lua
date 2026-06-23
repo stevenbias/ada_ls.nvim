@@ -274,6 +274,11 @@ function M.setup()
     return
   end
 
+  if vim.bo.filetype == "gpr" then
+    -- If the current buffer is a GPR file, use it as the project file
+    prj_file = vim.fn.expand("%:p")
+  end
+
   update_project(prj_file)
   require("ada_ls.gprtools").makeprg_setup(json_config)
   M.is_setup = true

@@ -74,7 +74,7 @@ function M.makeprg_setup(json_config)
 
   vim.api.nvim_create_autocmd("BufEnter", {
     group = vim.api.nvim_create_augroup("AdaMakeCmd", { clear = true }),
-    pattern = { "*.ad[bs]" },
+    pattern = { "*.ad[bs]", "*.gpr" },
     callback = function()
       vim.bo.makeprg = cmd
       vim.bo.errorformat = err_format
