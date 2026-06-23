@@ -64,10 +64,14 @@ local function save_new_configuration(root_dir, config)
     return
   end
 
-  file:write(vim.json.encode(config))
+  -- Save the project file name instead of the full path to avoid issues with
+  -- different environments
+  local cfg = vim.deepcopy(config)
+  cfg.projectFile = vim.fs.basename(M.project_file)
+  file:write(vim.json.encode(cfg))
   file:close()
 
-  require("ada_ls.gprtools").makeprg_setup(config)
+  require("ada_ls.gprtools").makeprg_setup(cfg)
 end
 
 local function set_scenario_var()
