@@ -37,6 +37,21 @@ local function notify_configuration_change(config)
   )
 end
 
+local function notify_worspace_folders_add(folders)
+  local params = { event = { added = {} } }
+
+  for _, folder in pairs(folders) do
+    local added =
+      { uri = vim.uri_from_fname(folder), name = vim.fs.dirname(folder) }
+    table.insert(params.event.added, added)
+  end
+
+  require("ada_ls.utils").notify_server(
+    "workspace/didChangeWorkspaceFolders",
+    params
+  )
+end
+
 local function save_new_configuration(root_dir, config)
   local json_path = vim.fs.joinpath(root_dir, ".als.json")
 
@@ -59,12 +74,6 @@ local function set_scenario_var()
   if M.project_file == "" then
     return
   end
-
-  local config = { ["projectFile"] = M.project_file }
-  notify_configuration_change(config)
-
-  -- Sometimes the notification is not immediate
-  require("ada_ls.lsp_cmd").get_prj_file()
 
   local gpr_files = { M.project_file }
   local uri_gpr_files = require("ada_ls.lsp_cmd").get_prj_dependencies()
@@ -98,14 +107,16 @@ local function set_scenario_var()
   end
 end
 
-local function create_config(config)
-  config["projectFile"] = vim.fs.basename(M.project_file)
+local function create_config()
+  local config = {}
+  config["projectFile"] = M.project_file
   if next(M.scenario_variables) ~= nil then
     config["scenarioVariables"] = M.scenario_variables
   end
+  return config
 end
 
-local function save_config()
+local function save_config(config)
   local utils = require("ada_ls.utils")
   if M.project_file == "" then
     utils.notify("No Ada project file selected.", vim.log.levels.WARN)
@@ -113,10 +124,9 @@ local function save_config()
   end
 
   local project_file_path = get_abspath(M.project_file)
-  local config = {}
-
-  create_config(config)
   save_new_configuration(project_file_path, config)
+
+  return config
 end
 
 local function detect_project_files(root_dir)
@@ -137,6 +147,23 @@ local function detect_project_files(root_dir)
   return find_downward
 end
 
+local function update_project(prj_file)
+  M.project_file = prj_file
+
+  local config = { projectFile = M.project_file }
+  notify_configuration_change(config)
+
+  set_scenario_var()
+  config = create_config()
+  save_config(config)
+
+  notify_configuration_change(config)
+  local folders = { get_abspath(M.project_file) }
+  notify_worspace_folders_add(folders)
+
+  vim.cmd("cd " .. vim.fs.dirname(folders[1]))
+end
+
 function M.pick_gpr_file()
   local utils = require("ada_ls.utils")
   local files =
@@ -155,9 +182,7 @@ function M.pick_gpr_file()
       "Only one Ada project file found: " .. files[1],
       vim.log.levels.INFO
     )
-    M.project_file = files[1]
-    set_scenario_var()
-    save_config()
+    update_project(files[1])
   else
     require("telescope.pickers")
       .new(opts, {
@@ -170,9 +195,7 @@ function M.pick_gpr_file()
             actions.close(prompt_buffer)
             local selection =
               require("telescope.actions.state").get_selected_entry()
-            M.project_file = selection[1]
-            set_scenario_var()
-            save_config()
+            update_project(selection[1])
           end)
           return true
         end,
@@ -236,7 +259,7 @@ function M.setup()
     return
   end
 
-  local _, _, json_config = M.decode_json_config(json_path)
+  local prj_file, _, json_config = M.decode_json_config(json_path)
   if not json_config then
     utils.notify(
       "Failed to decode Ada LSP configuration from " .. json_path,
@@ -245,7 +268,7 @@ function M.setup()
     return
   end
 
-  notify_configuration_change(json_config)
+  update_project(prj_file)
   require("ada_ls.gprtools").makeprg_setup(json_config)
   M.is_setup = true
 end
