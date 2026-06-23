@@ -124,13 +124,17 @@ local function detect_project_files(root_dir)
     return name:match(".*%.gpr$")
   end, { path = root_dir, limit = 10, type = "file" })
 
-  if find_downward and next(find_downward) then
-    return find_downward
-  else
-    return vim.fs.find(function(name)
-      return name:match(".*%.gpr$")
-    end, { upward = true, path = root_dir, limit = 10, type = "file" })
+  local find_upward = vim.fs.find(function(name)
+    return name:match(".*%.gpr$")
+  end, { upward = true, path = root_dir, limit = 10, type = "file" })
+
+  for _, v in ipairs(find_upward) do
+    if not vim.tbl_contains(find_downward, v) then
+      table.insert(find_downward, v)
+    end
   end
+
+  return find_downward
 end
 
 function M.pick_gpr_file()
