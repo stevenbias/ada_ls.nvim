@@ -75,8 +75,10 @@ local function set_scenario_var()
     return
   end
 
+  M.scenario_variables = {}
   local gpr_files = { M.project_file }
-  local uri_gpr_files = require("ada_ls.lsp_cmd").get_prj_dependencies()
+  local uri_gpr_files =
+    require("ada_ls.lsp_cmd").get_prj_dependencies(M.project_file)
 
   if uri_gpr_files and next(uri_gpr_files) then
     for _, f in pairs(uri_gpr_files) do

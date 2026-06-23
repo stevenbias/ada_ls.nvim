@@ -76,16 +76,12 @@ function M.get_prj_file()
   return prj_file
 end
 
-function M.get_prj_dependencies()
-  local prj_file = M.get_prj_file()
-  if not prj_file then
-    return nil, "No project file found"
-  end
+function M.get_prj_dependencies(prj_file)
   local arg = {
-    uri = prj_file,
+    uri = vim.uri_from_fname(prj_file),
     direction = 1,
   }
-  return M.send_command("als-gpr-dependencies", arg)
+  return M.send_command("als-gpr-dependencies", arg, 1500)
 end
 
 function M.go_to_other()
