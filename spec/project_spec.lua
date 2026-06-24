@@ -124,6 +124,28 @@ describe("ada_ls.project", function()
       assert.matches("-XMODE=debug", vars)
       assert.matches("-XPLATFORM=linux", vars)
     end)
+
+    it("builds scenario variables string from multiple variables", function()
+      local fixture_path = common.fixture_path("als_config.json")
+      rawset(vim.json, "decode", function(_raw)
+        return {
+          projectFile = "/project/test.gpr",
+          scenarioVariables = {
+            MODE = "release",
+            PLATFORM = "windows",
+            ARCH = "x86_64",
+            DEBUG = "false",
+          },
+        }
+      end)
+
+      local _, vars, _ = project.decode_json_config(fixture_path)
+
+      assert.matches("-XMODE=release", vars)
+      assert.matches("-XPLATFORM=windows", vars)
+      assert.matches("-XARCH=x86_64", vars)
+      assert.matches("-XDEBUG=false", vars)
+    end)
   end)
 
   describe("pick_gpr_file", function()
@@ -346,16 +368,48 @@ describe("ada_ls.project", function()
       project.setup()
 
       assert.is_false(project.is_setup)
-      -- Check that notify was called with error message
-      assert.stub(vim.notify).was_called()
-      local found_error = false
-      for _, call in ipairs(vim.notify.calls) do
-        if call.vals[1] and call.vals[1]:match("Failed to decode") then
-          found_error = true
-          break
+      assert.is_true(common.find_stub_call(vim.notify, "Failed to decode"))
+    end)
+
+    it("uses current GPR file when buffer filetype is gpr", function()
+      local mock_client =
+        common.create_lsp_client({ root_dir = "/project/root" })
+      common.setup_lsp_client(mock_client)
+
+      local temp_gpr, cleanup_gpr =
+        common.create_temp_file("project Test is\nend Test;\n", ".gpr")
+      local temp_cfg, cleanup_cfg =
+        common.create_temp_file('{"projectFile": "other.gpr"}')
+
+      rawset(vim.fs, "joinpath", function(dir, file)
+        return dir .. "/" .. file
+      end)
+      vim.fn.filereadable = stub.new().returns(1)
+      vim.fn.isdirectory = stub.new().returns(0)
+      vim.fs.find = stub.new().returns({ temp_gpr })
+      rawset(vim, "bo", { filetype = "gpr" })
+      vim.fn.expand = function(arg)
+        if arg == "%:p" or arg == "%" then
+          return temp_gpr
         end
+        return "/test/path/file.adb"
       end
-      assert.is_true(found_error)
+      rawset(vim.json, "decode", function()
+        return { projectFile = "other.gpr" }
+      end)
+
+      local orig_decode = project.decode_json_config
+      project.decode_json_config = function()
+        return orig_decode(temp_cfg)
+      end
+
+      project.setup()
+
+      assert.equals(temp_gpr, project.project_file)
+      assert.is_true(project.is_setup)
+
+      cleanup_cfg()
+      cleanup_gpr()
     end)
   end)
 
@@ -627,15 +681,7 @@ describe("ada_ls.project", function()
 
         project._save_config()
 
-        assert.stub(vim.notify).was_called()
-        local found_msg = false
-        for _, call in ipairs(vim.notify.calls) do
-          if call.vals[1] and call.vals[1]:match("No Ada project file") then
-            found_msg = true
-            break
-          end
-        end
-        assert.is_true(found_msg)
+        assert.is_true(common.find_stub_call(vim.notify, "No Ada project file"))
       end)
     end)
 
@@ -663,16 +709,11 @@ describe("ada_ls.project", function()
       end)
 
       it("parses external variables from GPR file", function()
-        -- Create temp GPR file with external variables
-        local temp_gpr = os.tmpname() .. ".gpr"
-        local file = io.open(temp_gpr, "w")
-        file:write('Mode : String := external("MODE", "debug");\n')
-        file:write('Arch : String := external("ARCH", "x86_64");\n')
-        file:close()
+        local gpr_content = 'Mode : String := external("MODE", "debug");\n'
+          .. 'Arch : String := external("ARCH", "x86_64");\n'
+        local temp_gpr, cleanup = common.create_temp_file(gpr_content, ".gpr")
 
         project.project_file = temp_gpr
-
-        -- Mock lsp_cmd
         package.preload["ada_ls.lsp_cmd"] = function()
           return {
             get_prj_file = function()
@@ -684,11 +725,7 @@ describe("ada_ls.project", function()
           }
         end
         package.loaded["ada_ls.lsp_cmd"] = nil
-
-        -- Mock filereadable to return 1
         vim.fn.filereadable = stub.new().returns(1)
-
-        -- Mock notify (called by notify_configuration_change)
         local mock_client = common.create_lsp_client()
         common.setup_lsp_client(mock_client)
 
@@ -696,26 +733,20 @@ describe("ada_ls.project", function()
 
         assert.equals("debug", project.scenario_variables["MODE"])
         assert.equals("x86_64", project.scenario_variables["ARCH"])
-
-        os.remove(temp_gpr)
+        cleanup()
       end)
 
       it("parses dependencies and their external variables", function()
-        -- Create main GPR file
-        local temp_gpr = os.tmpname() .. ".gpr"
-        local file = io.open(temp_gpr, "w")
-        file:write('Mode : String := external("MODE", "release");\n')
-        file:close()
-
-        -- Create dependency GPR file
-        local dep_gpr = os.tmpname() .. ".gpr"
-        file = io.open(dep_gpr, "w")
-        file:write('Platform : String := external("PLATFORM", "linux");\n')
-        file:close()
+        local temp_gpr, cleanup_gpr = common.create_temp_file(
+          'Mode : String := external("MODE", "release");\n',
+          ".gpr"
+        )
+        local dep_gpr, cleanup_dep = common.create_temp_file(
+          'Platform : String := external("PLATFORM", "linux");\n',
+          ".gpr"
+        )
 
         project.project_file = temp_gpr
-
-        -- Mock lsp_cmd to return dependency
         package.preload["ada_ls.lsp_cmd"] = function()
           return {
             get_prj_file = function()
@@ -727,11 +758,7 @@ describe("ada_ls.project", function()
           }
         end
         package.loaded["ada_ls.lsp_cmd"] = nil
-
-        -- Mock filereadable to return 1
         vim.fn.filereadable = stub.new().returns(1)
-
-        -- Mock notify
         local mock_client = common.create_lsp_client()
         common.setup_lsp_client(mock_client)
 
@@ -739,15 +766,12 @@ describe("ada_ls.project", function()
 
         assert.equals("release", project.scenario_variables["MODE"])
         assert.equals("linux", project.scenario_variables["PLATFORM"])
-
-        os.remove(temp_gpr)
-        os.remove(dep_gpr)
+        cleanup_gpr()
+        cleanup_dep()
       end)
 
       it("warns when GPR file is not readable", function()
         project.project_file = "/nonexistent/project.gpr"
-
-        -- Mock lsp_cmd
         package.preload["ada_ls.lsp_cmd"] = function()
           return {
             get_prj_file = function()
@@ -759,26 +783,13 @@ describe("ada_ls.project", function()
           }
         end
         package.loaded["ada_ls.lsp_cmd"] = nil
-
-        -- Mock filereadable to return 0
         vim.fn.filereadable = stub.new().returns(0)
-
-        -- Mock notify
         local mock_client = common.create_lsp_client()
         common.setup_lsp_client(mock_client)
 
         project._set_scenario_var()
 
-        -- Should have warned about unreadable file
-        assert.stub(vim.notify).was_called()
-        local found_warn = false
-        for _, call in ipairs(vim.notify.calls) do
-          if call.vals[1] and call.vals[1]:match("Could not read") then
-            found_warn = true
-            break
-          end
-        end
-        assert.is_true(found_warn)
+        assert.is_true(common.find_stub_call(vim.notify, "Could not read"))
       end)
     end)
   end

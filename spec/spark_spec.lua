@@ -824,6 +824,74 @@ other.ads:5:1: error: cannot prove precondition
           assert.same({}, result)
         end)
       end)
+
+      describe("ask_spark_options", function()
+        local spark_ui
+        local spark_mock
+        local captured
+
+        before_each(function()
+          captured = common.setup_spark_ui_mocks()
+          spark_mock = common.setup_spark_mock()
+          package.loaded["ada_ls.spark.ui"] = nil
+          spark_ui = require("ada_ls.spark.ui")
+        end)
+
+        it("returns nil when level selection cancelled", function()
+          rawset(vim.fn, "inputlist", function()
+            return -1
+          end)
+          spark_mock.load_state = function()
+            return { proof_level = nil, options = {} }
+          end
+
+          local result = "not_called"
+          spark_ui.ask_spark_options(function(r)
+            result = r
+          end)
+
+          assert.is_nil(result)
+        end)
+
+        it("returns nil when options selection cancelled", function()
+          local result = "not_called"
+          spark_ui.ask_spark_options(function(r)
+            result = r
+          end)
+
+          rawset(vim, "keymap", {
+            set = function(_, key, fn, _)
+              if key == "q" then
+                fn()
+              end
+            end,
+          })
+          package.loaded["ada_ls.spark.ui"] = nil
+          spark_ui = require("ada_ls.spark.ui")
+
+          spark_ui.ask_spark_options(function(r)
+            result = r
+          end)
+
+          assert.is_nil(result)
+        end)
+
+        it("saves state and calls callback on successful selection", function()
+          local result = nil
+
+          spark_ui.ask_spark_options(function(r)
+            result = r
+          end)
+
+          if captured.cr_callback then
+            captured.cr_callback()
+          end
+
+          assert.stub(spark_mock.save_state).was_called()
+          assert.is_table(result)
+          assert.is_number(result.proof_level)
+        end)
+      end)
     end)
   end
 
@@ -834,15 +902,7 @@ other.ads:5:1: error: cannot prove precondition
 
         spark.prove()
 
-        assert.stub(vim.notify).was_called()
-        local found_error = false
-        for _, call in ipairs(vim.notify.calls) do
-          if call.vals[1] and call.vals[1]:match("No project file") then
-            found_error = true
-            break
-          end
-        end
-        assert.is_true(found_error)
+        assert.is_true(common.find_stub_call(vim.notify, "No project file"))
       end)
 
       it("calls vim.system with gnatprove when project exists", function()
@@ -1203,6 +1263,73 @@ other.ads:5:1: error: cannot prove precondition
         spark.select_options()
 
         assert.stub(vim.fn.inputlist).was_called()
+      end)
+
+      it("notifies proof level when state is returned", function()
+        rawset(package.loaded, "ada_ls.spark.ui", {
+          ask_spark_options = function(callback)
+            callback({ proof_level = 2, options = {} })
+          end,
+        })
+        rawset(package.loaded, "ada_ls.spark.config", {
+          SPARK_OPTIONS = {},
+        })
+        local notify_stub = stub.new()
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = notify_stub,
+        })
+
+        package.loaded["ada_ls.spark"] = nil
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.select_options()
+
+        assert.is_true(
+          common.find_stub_call(notify_stub, "SPARK Level saved: 2")
+        )
+      end)
+
+      it("notifies options when state includes options", function()
+        rawset(package.loaded, "ada_ls.spark.ui", {
+          ask_spark_options = function(callback)
+            callback({ proof_level = 1, options = { 1, 2 } })
+          end,
+        })
+        rawset(package.loaded, "ada_ls.spark.config", {
+          SPARK_OPTIONS = {
+            { id = "multiprocessing" },
+            { id = "no_warnings" },
+          },
+        })
+        local notify_stub = stub.new()
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = notify_stub,
+        })
+
+        package.loaded["ada_ls.spark"] = nil
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.select_options()
+
+        assert.is_true(
+          common.find_stub_call(notify_stub, "SPARK options saved:")
+        )
+      end)
+
+      it("does nothing when callback returns nil", function()
+        rawset(package.loaded, "ada_ls.spark.ui", {
+          ask_spark_options = function(callback)
+            callback(nil)
+          end,
+        })
+        local notify_stub = stub.new()
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = notify_stub,
+        })
+
+        package.loaded["ada_ls.spark"] = nil
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.select_options()
+
+        assert.stub(notify_stub).was_not_called()
       end)
     end)
   end)
