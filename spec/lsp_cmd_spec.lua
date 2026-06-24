@@ -94,7 +94,7 @@ describe("ada_ls.lsp_cmd", function()
   end)
 
   describe("get_prj_dependencies", function()
-    it("returns nil when no project file", function()
+    it("returns nil when project file is nil", function()
       local mock_client = common.create_lsp_client({
         request = function(_self, _method, _params, callback)
           callback(nil, nil)
@@ -102,33 +102,23 @@ describe("ada_ls.lsp_cmd", function()
       })
       common.setup_lsp_client(mock_client)
 
-      local result, err = lsp_cmd.get_prj_dependencies()
+      local result, err = lsp_cmd.get_prj_dependencies(nil)
       assert.is_nil(result)
-      assert.matches("No project file", err)
+      assert.is_nil(err)
     end)
 
     it("returns dependencies when project file exists", function()
-      local call_count = 0
       local mock_client = common.create_lsp_client({
-        request = function(_self, method, _params, callback)
-          call_count = call_count + 1
-          if method == "workspace/executeCommand" then
-            if call_count == 1 then
-              -- First call: als-project-file
-              callback(nil, "/project/main.gpr")
-            else
-              -- Second call: als-gpr-dependencies
-              callback(nil, {
-                { uri = "file:///project/lib1.gpr" },
-                { uri = "file:///project/lib2.gpr" },
-              })
-            end
-          end
+        request = function(_self, _method, _params, callback)
+          callback(nil, {
+            { uri = "file:///project/lib1.gpr" },
+            { uri = "file:///project/lib2.gpr" },
+          })
         end,
       })
       common.setup_lsp_client(mock_client)
 
-      local result, err = lsp_cmd.get_prj_dependencies()
+      local result, err = lsp_cmd.get_prj_dependencies("/project/main.gpr")
       assert.is_nil(err)
       assert.is_table(result)
       assert.equals(2, #result)

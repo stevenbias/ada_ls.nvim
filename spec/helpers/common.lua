@@ -124,6 +124,24 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
     end
     return uri:gsub("^file://", "")
   end)
+  rawset(vim, "uri_from_fname", function(fname)
+    if not fname then
+      return nil
+    end
+    return "file://" .. fname
+  end)
+
+  -- Set up vim.deepcopy
+  rawset(vim, "deepcopy", function(t)
+    if type(t) ~= "table" then
+      return t
+    end
+    local copy = {}
+    for k, v in pairs(t) do
+      copy[k] = vim.deepcopy(v)
+    end
+    return copy
+  end)
 
   -- Set up vim.islist
   rawset(vim, "islist", function(t)

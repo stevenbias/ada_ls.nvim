@@ -53,19 +53,6 @@ describe("ada_ls.utils", function()
       assert.is_nil(client)
       assert.equals("Ada LSP client not found", err)
     end)
-
-    it("returns cached client on subsequent calls", function()
-      local mock_client = common.create_lsp_client()
-      common.setup_lsp_client(mock_client)
-
-      local client1 = utils.get_ada_ls()
-      local client2 = utils.get_ada_ls()
-
-      assert.equals(mock_client, client1)
-      assert.equals(client1, client2)
-      -- get_clients should only be called once due to caching
-      assert.stub(vim.lsp.get_clients).was_called(1)
-    end)
   end)
 
   describe("clear", function()

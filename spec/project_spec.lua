@@ -151,8 +151,8 @@ describe("ada_ls.project", function()
 
       project.pick_gpr_file()
 
-      assert.stub(vim.notify_once).was_called()
-      local call_args = vim.notify_once.calls[1]
+      assert.stub(vim.notify).was_called()
+      local call_args = vim.notify.calls[1]
       assert.matches("No Ada project files found", call_args.vals[1])
     end)
 
@@ -288,21 +288,27 @@ describe("ada_ls.project", function()
         common.create_lsp_client({ root_dir = "/project/root" })
       common.setup_lsp_client(mock_client)
 
+      -- Create a temp GPR file (needed because io.lines reads the actual file)
+      local temp_gpr = os.tmpname() .. ".gpr"
+      local gpr_file = io.open(temp_gpr, "w")
+      gpr_file:write("project Test is\nend Test;\n")
+      gpr_file:close()
+
       rawset(vim.fs, "joinpath", function(dir, file)
         return dir .. "/" .. file
       end)
       vim.fn.filereadable = stub.new().returns(1)
       vim.fn.isdirectory = stub.new().returns(0)
-      vim.fs.find = stub.new().returns({ "/project/root/test.gpr" })
+      vim.fs.find = stub.new().returns({ temp_gpr })
 
       -- Create a temp config file
       local temp_file = os.tmpname()
       local file = io.open(temp_file, "w")
-      file:write('{"projectFile": "/project/root/test.gpr"}')
+      file:write('{"projectFile": "' .. temp_gpr .. '"}')
       file:close()
 
       rawset(vim.json, "decode", function(_raw)
-        return { projectFile = "/project/root/test.gpr" }
+        return { projectFile = temp_gpr }
       end)
 
       -- Mock the decode_json_config to use our temp file
@@ -314,9 +320,10 @@ describe("ada_ls.project", function()
       project.setup()
 
       assert.is_true(project.is_setup)
-      assert.stub(vim.notify_once).was_called()
+      assert.stub(vim.notify).was_called()
 
       os.remove(temp_file)
+      os.remove(temp_gpr)
     end)
 
     it("notifies error when config decode fails", function()
@@ -499,8 +506,7 @@ describe("ada_ls.project", function()
         project.project_file = "/project/my.gpr"
         project.scenario_variables = {}
 
-        local config = {}
-        project._create_config(config)
+        local config = project._create_config()
 
         assert.equals("/project/my.gpr", config.projectFile)
         assert.is_nil(config.scenarioVariables)
@@ -510,8 +516,7 @@ describe("ada_ls.project", function()
         project.project_file = "/project/my.gpr"
         project.scenario_variables = { MODE = "debug", ARCH = "x86" }
 
-        local config = {}
-        project._create_config(config)
+        local config = project._create_config()
 
         assert.equals("/project/my.gpr", config.projectFile)
         assert.same({ MODE = "debug", ARCH = "x86" }, config.scenarioVariables)
@@ -573,6 +578,7 @@ describe("ada_ls.project", function()
           return dir .. "/" .. file
         end)
 
+        project.project_file = "/project/test.gpr"
         local config = { projectFile = "/project/test.gpr" }
         project._save_new_configuration(temp_dir, config)
 
@@ -596,8 +602,8 @@ describe("ada_ls.project", function()
         local config = { projectFile = "/project/test.gpr" }
         project._save_new_configuration("/nonexistent/readonly/path", config)
 
-        assert.stub(vim.notify_once).was_called()
-        local call_args = vim.notify_once.calls[1]
+        assert.stub(vim.notify).was_called()
+        local call_args = vim.notify.calls[1]
         assert.matches("Could not save", call_args.vals[1])
       end)
     end)
