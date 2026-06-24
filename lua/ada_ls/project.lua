@@ -37,7 +37,7 @@ local function notify_configuration_change(config)
   )
 end
 
-local function notify_worspace_folders_add(folders)
+local function notify_workspace_folders_add(folders)
   local params = { event = { added = {} } }
 
   for _, folder in pairs(folders) do
@@ -170,7 +170,7 @@ local function update_project(prj_file, cfg)
 
   notify_configuration_change(config)
   local folders = { get_abspath(M.project_file) }
-  notify_worspace_folders_add(folders)
+  notify_workspace_folders_add(folders)
 
   vim.cmd("cd " .. vim.fs.dirname(folders[1]))
 end
