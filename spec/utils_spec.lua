@@ -244,16 +244,33 @@ describe("ada_ls.utils", function()
   end)
 
   describe("reset_als_client", function()
-    it("clears client and reopens buffer", function()
+    it("notifies user when nvim-0.12 is not available", function()
       local mock_client = common.create_lsp_client()
       common.setup_lsp_client(mock_client)
+      rawset(vim.fn, "has", function(_feature)
+        return 0
+      end)
 
       utils.get_ada_ls()
 
       utils.reset_als_client()
 
-      assert.stub(mock_client.stop).was_called()
-      assert.stub(vim.cmd).was_called_with("e")
+      assert.stub(vim.notify).was_called()
+      assert.stub(vim.cmd).was_not_called()
+    end)
+
+    it("calls lsp restart when nvim-0.12 is available", function()
+      local mock_client = common.create_lsp_client()
+      common.setup_lsp_client(mock_client)
+      rawset(vim.fn, "has", function(_feature)
+        return 1
+      end)
+
+      utils.get_ada_ls()
+
+      utils.reset_als_client()
+
+      assert.stub(vim.cmd).was_called_with("lsp restart ada_ls")
     end)
   end)
 

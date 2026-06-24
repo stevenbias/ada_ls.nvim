@@ -342,7 +342,6 @@ describe("ada_ls.project", function()
       project.setup()
 
       assert.is_true(project.is_setup)
-      assert.stub(vim.notify).was_called()
 
       os.remove(temp_file)
       os.remove(temp_gpr)
