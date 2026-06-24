@@ -6,6 +6,9 @@ local M = {
 
 local function get_abspath(str)
   local abspath = vim.fs.abspath(str)
+  if not abspath then
+    return nil
+  end
   return abspath:match("(.*[/\\])")
 end
 
@@ -38,7 +41,10 @@ local function notify_configuration_change(config)
 end
 
 local function notify_workspace_folders_add(folders)
-  local params = { event = { added = {} } }
+  if folders == nil or #folders == 0 then
+    return
+  end
+  local params = { event = { added = {}, removed = {} } }
 
   for _, folder in pairs(folders) do
     local added =
