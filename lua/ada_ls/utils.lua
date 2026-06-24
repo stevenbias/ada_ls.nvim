@@ -132,10 +132,15 @@ end
 
 function M.reset_als_client()
   M.clear()
-  for _, client in pairs(vim.lsp.get_clients({ name = "ada_ls" })) do
-    client.stop(client, true)
+  if vim.fn.has("nvim-0.12") ~= 1 then
+    require("ada_ls.utils").notify(
+      "Please restart Ada_ls manually after changing the .als.json file.\n"
+        .. "Automatic restart is only supported in Neovim 0.12 and later.",
+      vim.log.levels.WARN
+    )
+    return
   end
-  vim.cmd("e") -- Reopen buffer to trigger LSP attach
+  vim.cmd("lsp restart ada_ls")
 end
 
 function M.clear()

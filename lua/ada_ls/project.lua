@@ -263,6 +263,7 @@ function M.setup()
     callback = function()
       local _, _, json_config = M.decode_json_config(json_path)
       require("ada_ls.gprtools").makeprg_setup(json_config)
+      require("ada_ls.utils").reset_als_client()
     end,
   })
 
