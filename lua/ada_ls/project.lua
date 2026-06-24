@@ -153,8 +153,13 @@ local function detect_project_files(root_dir)
   return find_downward
 end
 
-local function update_project(prj_file)
+local function update_project(prj_file, cfg)
   M.project_file = prj_file
+
+  if cfg ~= nil then
+    notify_configuration_change(cfg)
+    return
+  end
 
   local config = { projectFile = M.project_file }
   notify_configuration_change(config)
@@ -279,7 +284,7 @@ function M.setup()
     prj_file = vim.fn.expand("%:p")
   end
 
-  update_project(prj_file)
+  update_project(prj_file, json_config)
   require("ada_ls.gprtools").makeprg_setup(json_config)
   M.is_setup = true
 end
