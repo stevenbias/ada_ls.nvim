@@ -103,6 +103,8 @@ function M.get()
     return M.cfg
   end
 
+  local als_refactor = require("ada_ls.refactoring")
+
   M.cfg = {
     cmd = { "ada_language_server" },
     filetypes = { "ada" },
@@ -117,6 +119,12 @@ function M.get()
         )
       )
     end,
+    commands = {
+      ["als-refactor-add-parameters"] = als_refactor.add_parameter,
+      ["als-refactor-change_parameters_type"] = als_refactor.change_parameter_type,
+      ["als-refactor-change_parameters_default_value"] = als_refactor.change_parameter_default,
+      ["als-refactor-replace-type"] = als_refactor.replace_type,
+    },
   }
   return M.cfg
 end
