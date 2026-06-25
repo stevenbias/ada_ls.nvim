@@ -289,6 +289,7 @@ function M.setup()
   if vim.bo.filetype == "gpr" then
     -- If the current buffer is a GPR file, use it as the project file
     prj_file = vim.fn.expand("%:p")
+    json_config.projectFile = prj_file
   end
 
   update_project(prj_file, json_config)
