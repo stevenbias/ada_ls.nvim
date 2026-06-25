@@ -269,42 +269,45 @@ describe("ada_ls.lspconfig", function()
         assert.stub(vim.cmd.normal).was_not_called()
       end)
 
-      it("handles textDocument and executes scheduled callback", function()
-        local scheduled_fns = {}
-        rawset(vim, "schedule", function(fn)
-          table.insert(scheduled_fns, fn)
-        end)
-        rawset(vim, "uri_to_fname", function(uri)
-          return uri:gsub("file://", "")
-        end)
+      it(
+        "does not open file for textDocument edits (non-create changes)",
+        function()
+          local scheduled_fns = {}
+          rawset(vim, "schedule", function(fn)
+            table.insert(scheduled_fns, fn)
+          end)
 
-        local handler = setup_handler(function() end)
+          local original_called = false
+          local handler = setup_handler(function()
+            original_called = true
+          end)
 
-        package.loaded["ada_ls.utils"] = {
-          reset_als_client = stub.new(),
-          try_require = function()
-            return false
-          end,
-          notify = stub.new(),
-          clear = stub.new(),
-        }
+          package.loaded["ada_ls.utils"] = {
+            reset_als_client = stub.new(),
+            try_require = function()
+              return false
+            end,
+            notify = stub.new(),
+            clear = stub.new(),
+          }
 
-        handler(nil, {
-          edit = {
-            changeAnnotations = { ann1 = {} },
-            documentChanges = {
-              { textDocument = { uri = "file:///test/existing.adb" } },
+          -- textDocument edits are for existing files, not creates
+          -- should not trigger file-opening behavior
+          handler(nil, {
+            edit = {
+              documentChanges = {
+                {
+                  textDocument = { uri = "file:///test/existing.adb" },
+                  edits = {},
+                },
+              },
             },
-          },
-        }, als_ctx(), {})
+          }, als_ctx(), {})
 
-        assert.equals(1, #scheduled_fns)
-        vim.cmd = { edit = stub.new() }
-        scheduled_fns[1]()
-        assert.stub(vim.cmd.edit).was_called()
-        local call_args = vim.cmd.edit.calls[1].vals
-        assert.equals("/test/existing.adb", call_args[1])
-      end)
+          assert.is_true(original_called)
+          assert.equals(0, #scheduled_fns)
+        end
+      )
 
       it("passes through to original handler and returns response", function()
         local handler = setup_handler(function()

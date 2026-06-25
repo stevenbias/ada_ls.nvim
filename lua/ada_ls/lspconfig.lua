@@ -71,11 +71,10 @@ local function als_handlers()
     end
 
     if result and result.edit and result.edit.documentChanges then
-      local filename = ""
       for _, change in ipairs(result.edit.documentChanges) do
         if change.kind == "create" then
           require("ada_ls.utils").reset_als_client()
-          filename = vim.uri_to_fname(change.uri)
+          local filename = vim.uri_to_fname(change.uri)
           vim.schedule(function()
             vim.cmd.edit(filename)
             -- Fix last empty line that provokes bug on updating package body
@@ -84,10 +83,6 @@ local function als_handlers()
               vim.cmd.normal("dd")
               vim.cmd.normal("gg")
             end
-          end)
-        elseif change.textDocument and filename == "" then
-          vim.schedule(function()
-            vim.cmd.edit(vim.uri_to_fname(change.textDocument.uri))
           end)
         end
       end
