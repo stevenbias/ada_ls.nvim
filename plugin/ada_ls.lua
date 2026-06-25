@@ -22,7 +22,7 @@ local als_subcmd_tbl = {
   },
   clean = {
     impl = function()
-      require("ada_ls.gpr").clean()
+      require("ada_ls.gprtools").clean()
     end,
   },
   config = {
@@ -36,9 +36,9 @@ local als_subcmd_tbl = {
   edit_gpr = {
     impl = function()
       local notify = require("ada_ls.utils").notify
-      local gpr_uri = require("ada_ls.lsp_cmd").get_prj_file()
+      local gpr_uri, err = require("ada_ls.lsp_cmd").get_prj_file()
       if not gpr_uri then
-        notify("No project file found.", vim.log.levels.WARN)
+        notify(err, vim.log.levels.WARN)
         return
       end
       vim.cmd.edit(vim.uri_to_fname(gpr_uri))

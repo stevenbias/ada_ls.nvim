@@ -1,9 +1,9 @@
--- Tests for lua/ada_ls/gpr.lua
+-- Tests for lua/ada_ls/gprtools.lua
 local stub = require("luassert.stub")
 local common = require("spec.helpers.common")
 
-describe("ada_ls.gpr", function()
-  local gpr
+describe("ada_ls.gprtools", function()
+  local gprtools
   local project_mock
 
   before_each(function()
@@ -28,7 +28,7 @@ describe("ada_ls.gpr", function()
     end
     package.loaded["ada_ls.project"] = nil
 
-    gpr = require("ada_ls.gpr")
+    gprtools = require("ada_ls.gprtools")
   end)
 
   after_each(function()
@@ -41,7 +41,7 @@ describe("ada_ls.gpr", function()
     it("notifies warning when no config file found", function()
       vim.lsp.get_clients = stub.new().returns({})
 
-      gpr.clean()
+      gprtools.clean()
 
       assert.stub(vim.notify).was_called()
       local call_args = vim.notify.calls[1]
@@ -53,7 +53,7 @@ describe("ada_ls.gpr", function()
         common.create_lsp_client({ root_dir = "/project/root" })
       common.setup_lsp_client(mock_client)
 
-      gpr.clean()
+      gprtools.clean()
 
       assert.stub(vim.notify).was_called()
       local found_msg = false
@@ -74,7 +74,7 @@ describe("ada_ls.gpr", function()
         return "/project/root/my_project.gpr", ""
       end
 
-      gpr.clean()
+      gprtools.clean()
 
       assert.stub(vim.system).was_called()
       local call_args = vim.system.calls[1].vals
@@ -97,7 +97,7 @@ describe("ada_ls.gpr", function()
         captured_callback = callback
       end)
 
-      gpr.clean()
+      gprtools.clean()
 
       assert.is_function(captured_callback)
       captured_callback({ code = 0 })
@@ -125,7 +125,7 @@ describe("ada_ls.gpr", function()
         captured_callback = callback
       end)
 
-      gpr.clean()
+      gprtools.clean()
 
       assert.is_function(captured_callback)
       captured_callback({ code = 1, stderr = "gprclean: error message" })
@@ -150,7 +150,7 @@ describe("ada_ls.gpr", function()
         return "/project/root/my_project.gpr", " -XMODE=debug"
       end
 
-      gpr.makeprg_setup()
+      gprtools.makeprg_setup()
 
       assert.is_string(vim.bo.makeprg)
       assert.matches("gprbuild", vim.bo.makeprg)
@@ -166,7 +166,7 @@ describe("ada_ls.gpr", function()
         return "/project/root/my_project.gpr", ""
       end
 
-      gpr.makeprg_setup()
+      gprtools.makeprg_setup()
 
       assert.is_string(vim.bo.errorformat)
       assert.matches("%%f:%%l:%%c:", vim.bo.errorformat)
@@ -179,7 +179,7 @@ describe("ada_ls.gpr", function()
       vim.lsp.get_clients = stub.new().returns({})
       vim.bo.makeprg = nil
 
-      gpr.makeprg_setup()
+      gprtools.makeprg_setup()
 
       assert.is_nil(vim.bo.makeprg)
     end)
@@ -196,7 +196,7 @@ describe("ada_ls.gpr", function()
           ARCH = "x86_64",
         },
       }
-      gpr.makeprg_setup(json_config)
+      gprtools.makeprg_setup(json_config)
 
       assert.is_string(vim.bo.makeprg)
       assert.matches("gprbuild", vim.bo.makeprg)
@@ -215,7 +215,7 @@ describe("ada_ls.gpr", function()
         projectFile = "/test/my_project.gpr",
         scenarioVariables = {},
       }
-      gpr.makeprg_setup(json_config)
+      gprtools.makeprg_setup(json_config)
 
       assert.is_string(vim.bo.makeprg)
       assert.matches("gprbuild", vim.bo.makeprg)
@@ -228,7 +228,7 @@ describe("ada_ls.gpr", function()
       it("returns nil when no config file found", function()
         vim.lsp.get_clients = stub.new().returns({})
 
-        local result = gpr._gprbuild_cmd()
+        local result = gprtools._gprbuild_cmd()
         assert.is_nil(result)
       end)
 
@@ -237,7 +237,7 @@ describe("ada_ls.gpr", function()
           common.create_lsp_client({ root_dir = "/project/root" })
         common.setup_lsp_client(mock_client)
 
-        local result = gpr._gprbuild_cmd()
+        local result = gprtools._gprbuild_cmd()
         assert.is_nil(result)
       end)
 
@@ -249,7 +249,7 @@ describe("ada_ls.gpr", function()
           return "/project/root/my_project.gpr", " -XMODE=debug"
         end
 
-        local result = gpr._gprbuild_cmd()
+        local result = gprtools._gprbuild_cmd()
         assert.is_string(result)
         assert.matches("gprbuild", result)
         assert.matches("-d", result)
@@ -268,7 +268,7 @@ describe("ada_ls.gpr", function()
           return "/project/root/test.gpr", " -XARCH=x86_64 -XDEBUG=true"
         end
 
-        local result = gpr._gprbuild_cmd()
+        local result = gprtools._gprbuild_cmd()
         assert.matches("-XARCH=x86_64", result)
         assert.matches("-XDEBUG=true", result)
       end)
@@ -281,7 +281,7 @@ describe("ada_ls.gpr", function()
           return "/project/test.gpr", " -XMODE=release"
         end
 
-        local result = gpr._gprbuild_cmd(nil)
+        local result = gprtools._gprbuild_cmd(nil)
 
         assert.is_string(result)
         assert.matches("/project/test.gpr", result)
@@ -299,7 +299,7 @@ describe("ada_ls.gpr", function()
             TEST = "yes",
           },
         }
-        local result = gpr._gprbuild_cmd(json_config)
+        local result = gprtools._gprbuild_cmd(json_config)
         assert.is_string(result)
         assert.matches("direct.gpr", result)
         assert.matches("-XTEST=yes", result)

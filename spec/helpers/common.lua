@@ -10,7 +10,7 @@ function M.cleanup_packages()
   package.preload["ada_ls.utils"] = nil
   package.preload["ada_ls.lsp_cmd"] = nil
   package.preload["ada_ls.project"] = nil
-  package.preload["ada_ls.gpr"] = nil
+  package.preload["ada_ls.gprtools"] = nil
   package.preload["ada_ls.spark"] = nil
   package.preload["ada_ls.spark.config"] = nil
   package.preload["ada_ls.lspconfig"] = nil
@@ -19,7 +19,7 @@ function M.cleanup_packages()
   package.loaded["ada_ls.utils"] = nil
   package.loaded["ada_ls.lsp_cmd"] = nil
   package.loaded["ada_ls.project"] = nil
-  package.loaded["ada_ls.gpr"] = nil
+  package.loaded["ada_ls.gprtools"] = nil
   package.loaded["ada_ls.spark"] = nil
   package.loaded["ada_ls.spark.config"] = nil
   package.loaded["ada_ls.lspconfig"] = nil
@@ -123,6 +123,24 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
       return nil
     end
     return uri:gsub("^file://", "")
+  end)
+  rawset(vim, "uri_from_fname", function(fname)
+    if not fname then
+      return nil
+    end
+    return "file://" .. fname
+  end)
+
+  -- Set up vim.deepcopy
+  rawset(vim, "deepcopy", function(t)
+    if type(t) ~= "table" then
+      return t
+    end
+    local copy = {}
+    for k, v in pairs(t) do
+      copy[k] = vim.deepcopy(v)
+    end
+    return copy
   end)
 
   -- Set up vim.islist
@@ -254,6 +272,114 @@ end
 
 function M.mock_symbols(children)
   return { { children = children } }
+end
+
+-- Mock ada_ls.utils with configurable options
+---@param opts? { conf_file?: string, server_project?: string }
+function M.setup_utils_mock(opts)
+  opts = opts or {}
+  rawset(package.loaded, "ada_ls.utils", {
+    get_conf_file = function()
+      return opts.conf_file
+    end,
+    get_server_project_name = function()
+      return opts.server_project
+    end,
+    notify = stub.new(),
+  })
+end
+
+-- Search through stub calls for a matching pattern
+---@param stub_obj table The stub to search
+---@param pattern string Lua pattern to match against first argument
+---@return boolean found Whether a match was found
+function M.find_stub_call(stub_obj, pattern)
+  if not stub_obj.calls then
+    return false
+  end
+  for _, call in ipairs(stub_obj.calls) do
+    if call.vals[1] and call.vals[1]:match(pattern) then
+      return true
+    end
+  end
+  return false
+end
+
+-- Create a temporary file with content, returns path and cleanup function
+---@param content string File content
+---@param ext? string File extension (default: none)
+---@return string path, function cleanup
+function M.create_temp_file(content, ext)
+  local path = os.tmpname() .. (ext or "")
+  local file = io.open(path, "w")
+  file:write(content)
+  file:close()
+  return path, function()
+    os.remove(path)
+  end
+end
+
+-- Setup all vim mocks needed for spark/ui tests
+function M.setup_spark_ui_mocks()
+  rawset(vim, "fn", {
+    inputlist = function()
+      return 2
+    end,
+    len = function(t)
+      return #t
+    end,
+  })
+  rawset(vim, "o", { lines = 100, columns = 200 })
+  rawset(vim, "api", {
+    nvim_create_buf = stub.new().returns(1),
+    nvim_buf_set_lines = stub.new(),
+    nvim_open_win = stub.new().returns(2),
+    nvim_win_set_cursor = stub.new(),
+    nvim_win_get_cursor = stub.new().returns({ 3, 0 }),
+    nvim_win_close = stub.new(),
+    nvim_create_autocmd = stub.new(),
+    nvim__get_runtime = function()
+      return {}
+    end,
+  })
+  local bo = {}
+  setmetatable(bo, {
+    __index = function()
+      return {}
+    end,
+    __newindex = function() end,
+  })
+  rawset(vim, "bo", bo)
+
+  -- Return captured callbacks for test assertions
+  local captured = { cr_callback = nil, q_callback = nil }
+  rawset(vim, "keymap", {
+    set = function(_, key, fn, _)
+      if key == "<CR>" then
+        captured.cr_callback = fn
+      elseif key == "q" then
+        captured.q_callback = fn
+      end
+    end,
+  })
+  return captured
+end
+
+-- Setup mock for ada_ls.spark module
+---@param opts? { proof_level?: number, options?: table }
+function M.setup_spark_mock(opts)
+  opts = opts or {}
+  local mock = {
+    load_state = function()
+      return {
+        proof_level = opts.proof_level or 0,
+        options = opts.options or {},
+      }
+    end,
+    save_state = stub.new(),
+  }
+  rawset(package.loaded, "ada_ls.spark", mock)
+  return mock
 end
 
 return M

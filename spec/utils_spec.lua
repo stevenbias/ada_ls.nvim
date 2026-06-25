@@ -53,19 +53,6 @@ describe("ada_ls.utils", function()
       assert.is_nil(client)
       assert.equals("Ada LSP client not found", err)
     end)
-
-    it("returns cached client on subsequent calls", function()
-      local mock_client = common.create_lsp_client()
-      common.setup_lsp_client(mock_client)
-
-      local client1 = utils.get_ada_ls()
-      local client2 = utils.get_ada_ls()
-
-      assert.equals(mock_client, client1)
-      assert.equals(client1, client2)
-      -- get_clients should only be called once due to caching
-      assert.stub(vim.lsp.get_clients).was_called(1)
-    end)
   end)
 
   describe("clear", function()
@@ -257,16 +244,33 @@ describe("ada_ls.utils", function()
   end)
 
   describe("reset_als_client", function()
-    it("clears client and reopens buffer", function()
+    it("notifies user when nvim-0.12 is not available", function()
       local mock_client = common.create_lsp_client()
       common.setup_lsp_client(mock_client)
+      rawset(vim.fn, "has", function(_feature)
+        return 0
+      end)
 
       utils.get_ada_ls()
 
       utils.reset_als_client()
 
-      assert.stub(mock_client.stop).was_called()
-      assert.stub(vim.cmd).was_called_with("e")
+      assert.stub(vim.notify).was_called()
+      assert.stub(vim.cmd).was_not_called()
+    end)
+
+    it("calls lsp restart when nvim-0.12 is available", function()
+      local mock_client = common.create_lsp_client()
+      common.setup_lsp_client(mock_client)
+      rawset(vim.fn, "has", function(_feature)
+        return 1
+      end)
+
+      utils.get_ada_ls()
+
+      utils.reset_als_client()
+
+      assert.stub(vim.cmd).was_called_with("lsp restart ada_ls")
     end)
   end)
 

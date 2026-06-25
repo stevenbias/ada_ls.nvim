@@ -121,9 +121,9 @@ local function run_gnatprove(kind, state)
   local lsp_cmd = require("ada_ls.lsp_cmd")
 
   -- Get project file
-  local prj_uri = lsp_cmd.get_prj_file()
+  local prj_uri, err = lsp_cmd.get_prj_file()
   if not prj_uri then
-    notify("No project file found", vim.log.levels.ERROR)
+    notify(err, vim.log.levels.ERROR)
     return
   end
   local prj_file = vim.uri_to_fname(prj_uri)
