@@ -71,11 +71,10 @@ local function als_handlers()
     end
 
     if result and result.edit and result.edit.documentChanges then
-      local filename = ""
       for _, change in ipairs(result.edit.documentChanges) do
         if change.kind == "create" then
           require("ada_ls.utils").reset_als_client()
-          filename = vim.uri_to_fname(change.uri)
+          local filename = vim.uri_to_fname(change.uri)
           vim.schedule(function()
             vim.cmd.edit(filename)
             -- Fix last empty line that provokes bug on updating package body
@@ -84,10 +83,6 @@ local function als_handlers()
               vim.cmd.normal("dd")
               vim.cmd.normal("gg")
             end
-          end)
-        elseif change.textDocument and filename == "" then
-          vim.schedule(function()
-            vim.cmd.edit(vim.uri_to_fname(change.textDocument.uri))
           end)
         end
       end
@@ -103,6 +98,8 @@ function M.get()
     return M.cfg
   end
 
+  local als_refactor = require("ada_ls.refactoring")
+
   M.cfg = {
     cmd = { "ada_language_server" },
     filetypes = { "ada" },
@@ -117,6 +114,12 @@ function M.get()
         )
       )
     end,
+    commands = {
+      ["als-refactor-add-parameters"] = als_refactor.add_parameter,
+      ["als-refactor-change_parameters_type"] = als_refactor.change_parameter_type,
+      ["als-refactor-change_parameters_default_value"] = als_refactor.change_parameter_default,
+      ["als-refactor-replace-type"] = als_refactor.replace_type,
+    },
   }
   return M.cfg
 end

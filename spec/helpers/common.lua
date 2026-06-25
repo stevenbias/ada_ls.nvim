@@ -14,6 +14,7 @@ function M.cleanup_packages()
   package.preload["ada_ls.spark"] = nil
   package.preload["ada_ls.spark.config"] = nil
   package.preload["ada_ls.lspconfig"] = nil
+  package.preload["ada_ls.refactoring"] = nil
   -- Then clear loaded modules
   package.loaded["ada_ls"] = nil
   package.loaded["ada_ls.utils"] = nil
@@ -23,6 +24,7 @@ function M.cleanup_packages()
   package.loaded["ada_ls.spark"] = nil
   package.loaded["ada_ls.spark.config"] = nil
   package.loaded["ada_ls.lspconfig"] = nil
+  package.loaded["ada_ls.refactoring"] = nil
 end
 
 -- Vim API mocking
