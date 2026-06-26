@@ -276,7 +276,7 @@ get_server_project_name()                     *ada_ls.utils.get_server_project_n
             return name and ("GPR: " .. name) or ""
           end,
           cond = function()
-            return vim.bo.filetype == "ada"
+            return vim.bo.filetype == "ada" or vim.bo.filetype == "gpr"
           end,
         }
 <

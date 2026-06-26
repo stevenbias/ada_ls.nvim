@@ -157,7 +157,7 @@ require("lualine").setup({
           return name and ("GPR: " .. name) or ""
         end,
         cond = function()
-          return vim.bo.filetype == "ada"
+          return vim.bo.filetype == "ada" or vim.bo.filetype == "gpr"
         end,
       },
     },
