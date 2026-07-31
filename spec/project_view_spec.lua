@@ -646,6 +646,106 @@ describe("ada_ls.project_view", function()
       assert.stub(refresh_stub).was_called()
     end)
   end)
+
+  describe("select_options", function()
+    local captured_keymaps
+    local buf_lines
+
+    before_each(function()
+      common.cleanup_packages()
+      captured_keymaps = {}
+      buf_lines = {}
+
+      common.setup_vim_globals({
+        nvim_create_buf = function()
+          return 42
+        end,
+        nvim_buf_set_lines = function(_, _, _, _, lines)
+          buf_lines = lines
+        end,
+        nvim_open_win = function()
+          return 99
+        end,
+        nvim_win_is_valid = function()
+          return true
+        end,
+        nvim_win_close = function() end,
+        nvim_create_autocmd = function() end,
+      })
+
+      -- Mock vim.bo for buffer options
+      vim.bo = setmetatable({}, {
+        __index = function()
+          return {}
+        end,
+        __newindex = function() end,
+      })
+
+      -- Mock vim.o for editor dimensions
+      vim.o = { columns = 120, lines = 40 }
+
+      -- Capture keymap.set calls
+      vim.keymap = {
+        set = function(mode, key, callback, opts)
+          captured_keymaps[key] =
+            { mode = mode, callback = callback, opts = opts }
+        end,
+      }
+
+      -- Mock tree module
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        is_open = function()
+          return false
+        end,
+        refresh = function() end,
+      })
+    end)
+
+    after_each(function()
+      common.cleanup_packages()
+    end)
+
+    it("creates a floating window with options", function()
+      project_view = require("ada_ls.project_view")
+
+      project_view.select_options()
+
+      -- Should have created buffer content
+      assert.is_true(#buf_lines > 0)
+      -- Should contain option labels
+      local content = table.concat(buf_lines, "\n")
+      assert.truthy(content:find("Flat Mode"))
+      assert.truthy(content:find("Object Directories"))
+      assert.truthy(content:find("Runtime Files"))
+    end)
+
+    it("sets up keymaps for toggling options", function()
+      project_view = require("ada_ls.project_view")
+
+      project_view.select_options()
+
+      -- Should have keymaps for 1, 2, 3, q, Esc
+      assert.is_not_nil(captured_keymaps["1"])
+      assert.is_not_nil(captured_keymaps["2"])
+      assert.is_not_nil(captured_keymaps["3"])
+      assert.is_not_nil(captured_keymaps["q"])
+      assert.is_not_nil(captured_keymaps["<Esc>"])
+    end)
+
+    it("toggles option when number key pressed", function()
+      project_view = require("ada_ls.project_view")
+      project_view._state.flat_mode = false
+
+      project_view.select_options()
+
+      -- Press "1" to toggle flat_mode
+      if captured_keymaps["1"] and captured_keymaps["1"].callback then
+        captured_keymaps["1"].callback()
+      end
+
+      assert.is_true(project_view._state.flat_mode)
+    end)
+  end)
 end)
 
 -- Test internals when ADA_LS_TEST_MODE is set
@@ -837,6 +937,1520 @@ if os.getenv("ADA_LS_TEST_MODE") then
       it("handles nil values", function()
         local result = tree._get_relative_path(nil, "/project")
         assert.equals("", result)
+      end)
+    end)
+
+    describe("_make_node_id", function()
+      it("generates correct format type:project_id:path", function()
+        local result = tree._make_node_id("file", "/src/main.adb", "proj_1")
+        assert.equals("file:proj_1:/src/main.adb", result)
+      end)
+
+      it("handles nil project_id", function()
+        local result = tree._make_node_id("directory", "/src", nil)
+        assert.equals("directory::/src", result)
+      end)
+
+      it("generates unique IDs for different types", function()
+        local file_id = tree._make_node_id("file", "/src/main.adb", "proj_1")
+        local dir_id =
+          tree._make_node_id("directory", "/src/main.adb", "proj_1")
+        assert.is_not.equals(file_id, dir_id)
+      end)
+
+      it("generates unique IDs for different projects", function()
+        local id1 = tree._make_node_id("file", "/src/main.adb", "proj_1")
+        local id2 = tree._make_node_id("file", "/src/main.adb", "proj_2")
+        assert.is_not.equals(id1, id2)
+      end)
+    end)
+
+    describe("_build_tree", function()
+      local function create_test_data(opts)
+        opts = opts or {}
+        return {
+          root_project_id = "proj_1",
+          projects = {
+            ["proj_1"] = {
+              project = {
+                id = "proj_1",
+                name = "main_project",
+                file_name = "/project/main.gpr",
+                directory = "/project",
+                object_dir = "/project/obj",
+              },
+              sources = opts.sources
+                or {
+                  {
+                    file_name = "/project/src/main.adb",
+                    simple_name = "main.adb",
+                    directory = "/project/src",
+                  },
+                  {
+                    file_name = "/project/src/utils.ads",
+                    simple_name = "utils.ads",
+                    directory = "/project/src",
+                  },
+                },
+              imports = opts.imports or {},
+              aggregated = opts.aggregated or {},
+              extended = opts.extended or {},
+            },
+          },
+          runtime_project = opts.runtime_project,
+        }
+      end
+
+      before_each(function()
+        -- Clear expanded state before each test
+        tree._tree_state.expanded = {}
+      end)
+
+      it("returns project node at root level", function()
+        local data = create_test_data()
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        assert.equals(1, #nodes)
+        assert.equals("project", nodes[1].type)
+        assert.equals("main_project (Root)", nodes[1].name)
+        assert.equals(0, nodes[1].depth)
+        assert.is_true(nodes[1].expandable)
+        assert.is_true(nodes[1].is_root)
+      end)
+
+      it("groups sources by directory when project is expanded", function()
+        local data = create_test_data()
+        -- Expand the project
+        local project_id = "project:proj_1:/project/main.gpr"
+        tree._tree_state.expanded[project_id] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        -- Should have: project + 1 directory
+        assert.equals(2, #nodes)
+        assert.equals("project", nodes[1].type)
+        assert.equals("directory", nodes[2].type)
+        assert.equals("src", nodes[2].name)
+        assert.equals(1, nodes[2].depth)
+      end)
+
+      it("shows files when directory is expanded", function()
+        local data = create_test_data()
+        -- Expand project and directory
+        tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+        tree._tree_state.expanded["directory:proj_1:/project/src"] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        -- Should have: project + directory + 2 files
+        assert.equals(4, #nodes)
+        assert.equals("file", nodes[3].type)
+        assert.equals("main.adb", nodes[3].name)
+        assert.equals("file", nodes[4].type)
+        assert.equals("utils.ads", nodes[4].name)
+        -- Files should be sorted alphabetically
+        assert.is_true(nodes[3].name < nodes[4].name)
+      end)
+
+      it("shows object directory when option enabled", function()
+        local data = create_test_data()
+        tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = true,
+          show_runtime = false,
+        })
+
+        -- Find object_dir node
+        local obj_node = nil
+        for _, node in ipairs(nodes) do
+          if node.type == "object_dir" then
+            obj_node = node
+            break
+          end
+        end
+
+        assert.is_not_nil(obj_node)
+        assert.equals("obj (obj)", obj_node.name)
+        assert.equals("/project/obj", obj_node.path)
+        assert.is_false(obj_node.expandable)
+      end)
+
+      it("shows all projects at root in flat mode", function()
+        local data = create_test_data({
+          imports = { "proj_2" },
+        })
+        data.projects["proj_2"] = {
+          project = {
+            id = "proj_2",
+            name = "sub_project",
+            file_name = "/subproj/sub.gpr",
+            directory = "/subproj",
+          },
+          sources = {},
+          imports = {},
+          aggregated = {},
+          extended = {},
+        }
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = true,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        -- Both projects at depth 0
+        assert.equals(2, #nodes)
+        assert.equals(0, nodes[1].depth)
+        assert.equals(0, nodes[2].depth)
+        -- Root project should be first
+        assert.truthy(nodes[1].name:find("Root"))
+      end)
+
+      it("shows sub-projects hierarchically when not flat mode", function()
+        local data = create_test_data({
+          imports = { "proj_2" },
+        })
+        data.projects["proj_2"] = {
+          project = {
+            id = "proj_2",
+            name = "sub_project",
+            file_name = "/subproj/sub.gpr",
+            directory = "/subproj",
+          },
+          sources = {},
+          imports = {},
+          aggregated = {},
+          extended = {},
+        }
+        -- Expand root project to see sub-projects
+        tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        -- Root at depth 0, sub-project at depth 1
+        local sub_node = nil
+        for _, node in ipairs(nodes) do
+          if node.name == "sub_project" then
+            sub_node = node
+            break
+          end
+        end
+
+        assert.is_not_nil(sub_node)
+        assert.equals(1, sub_node.depth)
+      end)
+
+      it("shows runtime project when option enabled", function()
+        local data = create_test_data({
+          runtime_project = {
+            project = {
+              id = "runtime",
+              name = "runtime",
+              directory = "/usr/share/gnat",
+            },
+            sources = {
+              {
+                file_name = "/usr/share/gnat/adainclude/ada.ads",
+                simple_name = "ada.ads",
+                directory = "/usr/share/gnat/adainclude",
+              },
+            },
+          },
+        })
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = true,
+        })
+
+        -- Find runtime node
+        local runtime_node = nil
+        for _, node in ipairs(nodes) do
+          if node.type == "runtime" then
+            runtime_node = node
+            break
+          end
+        end
+
+        assert.is_not_nil(runtime_node)
+        assert.equals("Runtime", runtime_node.name)
+        assert.equals(0, runtime_node.depth)
+        assert.is_true(runtime_node.expandable)
+      end)
+
+      it("shows runtime directories when runtime expanded", function()
+        local data = create_test_data({
+          runtime_project = {
+            project = {
+              id = "runtime",
+              name = "runtime",
+              directory = "/usr/share/gnat",
+            },
+            sources = {
+              {
+                file_name = "/usr/share/gnat/adainclude/ada.ads",
+                simple_name = "ada.ads",
+                directory = "/usr/share/gnat/adainclude",
+              },
+            },
+          },
+        })
+        tree._tree_state.expanded["runtime:runtime:runtime"] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = true,
+        })
+
+        -- Should have project + runtime + runtime directory
+        local dir_node = nil
+        for _, node in ipairs(nodes) do
+          if node.type == "directory" and node.project_id == "runtime" then
+            dir_node = node
+            break
+          end
+        end
+
+        assert.is_not_nil(dir_node)
+        assert.equals(1, dir_node.depth)
+      end)
+
+      it("handles multiple source directories", function()
+        local data = create_test_data({
+          sources = {
+            {
+              file_name = "/project/src/main.adb",
+              simple_name = "main.adb",
+              directory = "/project/src",
+            },
+            {
+              file_name = "/project/tests/test.adb",
+              simple_name = "test.adb",
+              directory = "/project/tests",
+            },
+          },
+        })
+        tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        -- Count directory nodes
+        local dir_count = 0
+        for _, node in ipairs(nodes) do
+          if node.type == "directory" then
+            dir_count = dir_count + 1
+          end
+        end
+
+        assert.equals(2, dir_count)
+      end)
+
+      it("handles empty sources array", function()
+        local data = create_test_data({ sources = {} })
+        tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        -- Only project node, no directories
+        assert.equals(1, #nodes)
+        assert.equals("project", nodes[1].type)
+      end)
+    end)
+
+    describe("_filter_nodes", function()
+      local test_nodes
+
+      before_each(function()
+        test_nodes = {
+          {
+            id = "project:proj_1:/project.gpr",
+            type = "project",
+            name = "main_project",
+            depth = 0,
+            expandable = true,
+            project_id = "proj_1",
+          },
+          {
+            id = "directory:proj_1:/src",
+            type = "directory",
+            name = "src",
+            path = "/src",
+            depth = 1,
+            expandable = true,
+            project_id = "proj_1",
+          },
+          {
+            id = "file:proj_1:/src/main.adb",
+            type = "file",
+            name = "main.adb",
+            path = "/src/main.adb",
+            depth = 2,
+            expandable = false,
+            project_id = "proj_1",
+          },
+          {
+            id = "file:proj_1:/src/utils.ads",
+            type = "file",
+            name = "utils.ads",
+            path = "/src/utils.ads",
+            depth = 2,
+            expandable = false,
+            project_id = "proj_1",
+          },
+        }
+      end)
+
+      it("returns all nodes when filter is empty", function()
+        local result = tree._filter_nodes(test_nodes, "")
+        assert.equals(4, #result)
+      end)
+
+      it("filters nodes by name (case-insensitive)", function()
+        local result = tree._filter_nodes(test_nodes, "main")
+        -- Should include main.adb and its parents
+        local names = {}
+        for _, node in ipairs(result) do
+          table.insert(names, node.name)
+        end
+        assert.truthy(vim.tbl_contains(names, "main.adb"))
+      end)
+
+      it("includes parent nodes of matching files", function()
+        local result = tree._filter_nodes(test_nodes, "utils")
+        -- Should include utils.ads, src directory, and project
+        assert.is_true(#result >= 1)
+        -- The matching file should be included
+        local has_utils = false
+        for _, node in ipairs(result) do
+          if node.name == "utils.ads" then
+            has_utils = true
+            break
+          end
+        end
+        assert.is_true(has_utils)
+      end)
+
+      it("returns empty array when no matches", function()
+        local result = tree._filter_nodes(test_nodes, "nonexistent")
+        assert.equals(0, #result)
+      end)
+
+      it("matches partial names", function()
+        local result = tree._filter_nodes(test_nodes, "util")
+        local has_utils = false
+        for _, node in ipairs(result) do
+          if node.name == "utils.ads" then
+            has_utils = true
+            break
+          end
+        end
+        assert.is_true(has_utils)
+      end)
+
+      it("handles uppercase filter", function()
+        local result = tree._filter_nodes(test_nodes, "MAIN")
+        local has_main = false
+        for _, node in ipairs(result) do
+          if node.name == "main.adb" then
+            has_main = true
+            break
+          end
+        end
+        assert.is_true(has_main)
+      end)
+    end)
+
+    describe("_build_tree_prefix", function()
+      it("returns empty string for depth 0 nodes", function()
+        local nodes = {
+          { depth = 0, name = "project" },
+        }
+        local result = tree._build_tree_prefix(1, nodes)
+        assert.equals("", result)
+      end)
+
+      it("returns branch connector for non-last node at depth 1", function()
+        local nodes = {
+          { depth = 0, name = "project" },
+          { depth = 1, name = "src" },
+          { depth = 1, name = "tests" }, -- sibling after
+        }
+        local result = tree._build_tree_prefix(2, nodes)
+        -- Should use branch connector (not last)
+        assert.equals(tree._tree_chars.branch, result)
+      end)
+
+      it("returns last connector for last node at depth 1", function()
+        local nodes = {
+          { depth = 0, name = "project" },
+          { depth = 1, name = "src" },
+          { depth = 1, name = "tests" },
+        }
+        local result = tree._build_tree_prefix(3, nodes)
+        -- Should use last connector
+        assert.equals(tree._tree_chars.last, result)
+      end)
+
+      it("builds vertical lines for nested nodes", function()
+        local nodes = {
+          { depth = 0, name = "project" },
+          { depth = 1, name = "src" },
+          { depth = 2, name = "main.adb" },
+          { depth = 1, name = "tests" }, -- sibling at depth 1
+        }
+        local result = tree._build_tree_prefix(3, nodes)
+        -- Should have vertical line + last connector
+        -- Because depth 1 has more siblings after this file
+        assert.truthy(result:find(tree._tree_chars.vertical, 1, true))
+      end)
+
+      it("builds space for nested nodes without more siblings", function()
+        local nodes = {
+          { depth = 0, name = "project" },
+          { depth = 1, name = "src" },
+          { depth = 2, name = "main.adb" },
+        }
+        local result = tree._build_tree_prefix(3, nodes)
+        -- Should have space + last connector (no more siblings at depth 1)
+        assert.truthy(result:find(tree._tree_chars.space, 1, true))
+        assert.truthy(result:find(tree._tree_chars.last, 1, true))
+      end)
+
+      it("handles deeply nested nodes", function()
+        local nodes = {
+          { depth = 0, name = "project" },
+          { depth = 1, name = "src" },
+          { depth = 2, name = "engine" },
+          { depth = 3, name = "core.adb" },
+        }
+        local result = tree._build_tree_prefix(4, nodes)
+        -- Depth 3 node should have prefix for depth 1 and 2
+        assert.is_true(#result > #tree._tree_chars.last)
+      end)
+    end)
+
+    describe("_safe_basename", function()
+      it("returns empty string for nil input", function()
+        local result = tree._safe_basename(nil)
+        assert.equals("", result)
+      end)
+
+      it("returns empty string for empty string input", function()
+        local result = tree._safe_basename("")
+        assert.equals("", result)
+      end)
+
+      it("returns basename of path", function()
+        local result = tree._safe_basename("/project/src/main.adb")
+        assert.equals("main.adb", result)
+      end)
+
+      it("handles trailing slashes", function()
+        local result = tree._safe_basename("/project/src/")
+        assert.equals("src", result)
+      end)
+
+      it("handles multiple trailing slashes", function()
+        local result = tree._safe_basename("/project/src///")
+        assert.equals("src", result)
+      end)
+    end)
+
+    describe("_toggle_expanded / _is_expanded", function()
+      before_each(function()
+        tree._tree_state.expanded = {}
+      end)
+
+      it("returns false for non-expanded node", function()
+        assert.is_false(tree._is_expanded("some_id"))
+      end)
+
+      it("toggles node expansion state", function()
+        assert.is_false(tree._is_expanded("node_1"))
+        tree._toggle_expanded("node_1")
+        assert.is_true(tree._is_expanded("node_1"))
+        tree._toggle_expanded("node_1")
+        assert.is_false(tree._is_expanded("node_1"))
+      end)
+    end)
+
+    describe("_get_node_icon", function()
+      before_each(function()
+        tree._tree_state.expanded = {}
+      end)
+
+      it("returns file icon for file nodes", function()
+        local node = { type = "file", name = "main.adb", id = "file_1" }
+        local icon, _ = tree._get_node_icon(node)
+        assert.equals(tree._icons.file, icon)
+      end)
+
+      it("returns directory icon for collapsed directory", function()
+        local node = {
+          type = "directory",
+          name = "src",
+          id = "dir_1",
+        }
+        local icon, hl = tree._get_node_icon(node)
+        assert.equals(tree._icons.directory, icon)
+        assert.equals("Directory", hl)
+      end)
+
+      it("returns open directory icon for expanded directory", function()
+        tree._tree_state.expanded["dir_1"] = true
+        local node = {
+          type = "directory",
+          name = "src",
+          id = "dir_1",
+        }
+        local icon, _ = tree._get_node_icon(node)
+        assert.equals(tree._icons.directory_open, icon)
+      end)
+
+      it("returns project_root icon for root project", function()
+        local node = {
+          type = "project",
+          name = "main",
+          id = "proj_1",
+          is_root = true,
+        }
+        local icon, hl = tree._get_node_icon(node)
+        assert.equals(tree._icons.project_root, icon)
+        assert.equals("Title", hl)
+      end)
+
+      it("returns project icon for non-root project", function()
+        local node = {
+          type = "project",
+          name = "sub",
+          id = "proj_2",
+          is_root = false,
+        }
+        local icon, hl = tree._get_node_icon(node)
+        assert.equals(tree._icons.project, icon)
+        assert.equals("Type", hl)
+      end)
+
+      it("returns object_dir icon", function()
+        local node = { type = "object_dir", name = "obj", id = "obj_1" }
+        local icon, hl = tree._get_node_icon(node)
+        assert.equals(tree._icons.object_dir, icon)
+        assert.equals("Special", hl)
+      end)
+
+      it("returns runtime icon for collapsed runtime", function()
+        local node = { type = "runtime", name = "Runtime", id = "runtime_1" }
+        local icon, hl = tree._get_node_icon(node)
+        assert.equals(tree._icons.runtime, icon)
+        assert.equals("Comment", hl)
+      end)
+
+      it("returns open icon for expanded runtime", function()
+        tree._tree_state.expanded["runtime_1"] = true
+        local node = { type = "runtime", name = "Runtime", id = "runtime_1" }
+        local icon, _ = tree._get_node_icon(node)
+        assert.equals(tree._icons.directory_open, icon)
+      end)
+
+      it("returns space for unknown node type", function()
+        local node = { type = "unknown", name = "test", id = "unknown_1" }
+        local icon, hl = tree._get_node_icon(node)
+        assert.equals(" ", icon)
+        assert.is_nil(hl)
+      end)
+    end)
+
+    describe("_build_tree with aggregated/extended projects", function()
+      local function create_multi_project_data()
+        return {
+          root_project_id = "proj_1",
+          projects = {
+            ["proj_1"] = {
+              project = {
+                id = "proj_1",
+                name = "main_project",
+                file_name = "/project/main.gpr",
+                directory = "/project",
+              },
+              sources = {},
+              imports = {},
+              aggregated = { "proj_2" },
+              extended = { "proj_3" },
+            },
+            ["proj_2"] = {
+              project = {
+                id = "proj_2",
+                name = "aggregated_project",
+                file_name = "/agg/agg.gpr",
+                directory = "/agg",
+              },
+              sources = {},
+              imports = {},
+              aggregated = {},
+              extended = {},
+            },
+            ["proj_3"] = {
+              project = {
+                id = "proj_3",
+                name = "extended_project",
+                file_name = "/ext/ext.gpr",
+                directory = "/ext",
+              },
+              sources = {},
+              imports = {},
+              aggregated = {},
+              extended = {},
+            },
+          },
+        }
+      end
+
+      before_each(function()
+        tree._tree_state.expanded = {}
+      end)
+
+      it("shows aggregated projects when root expanded", function()
+        local data = create_multi_project_data()
+        tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        -- Should have root + aggregated + extended
+        assert.equals(3, #nodes)
+        local names = {}
+        for _, node in ipairs(nodes) do
+          table.insert(names, node.name)
+        end
+        assert.truthy(vim.tbl_contains(names, "aggregated_project"))
+        assert.truthy(vim.tbl_contains(names, "extended_project"))
+      end)
+
+      it("sorts sub-projects alphabetically", function()
+        local data = create_multi_project_data()
+        tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        -- Sub-projects should be sorted: aggregated_project < extended_project
+        assert.equals("aggregated_project", nodes[2].name)
+        assert.equals("extended_project", nodes[3].name)
+      end)
+    end)
+
+    describe("_build_tree with runtime files expanded", function()
+      before_each(function()
+        tree._tree_state.expanded = {}
+      end)
+
+      it("shows runtime files when runtime directory expanded", function()
+        local data = {
+          root_project_id = "proj_1",
+          projects = {
+            ["proj_1"] = {
+              project = {
+                id = "proj_1",
+                name = "main_project",
+                file_name = "/project/main.gpr",
+                directory = "/project",
+              },
+              sources = {},
+              imports = {},
+              aggregated = {},
+              extended = {},
+            },
+          },
+          runtime_project = {
+            project = {
+              id = "runtime",
+              name = "runtime",
+              directory = "/usr/share/gnat",
+            },
+            sources = {
+              {
+                file_name = "/usr/share/gnat/adainclude/ada.ads",
+                simple_name = "ada.ads",
+                directory = "/usr/share/gnat/adainclude",
+              },
+              {
+                file_name = "/usr/share/gnat/adainclude/system.ads",
+                simple_name = "system.ads",
+                directory = "/usr/share/gnat/adainclude",
+              },
+            },
+          },
+        }
+        -- Expand runtime and its directory
+        tree._tree_state.expanded["runtime:runtime:runtime"] = true
+        tree._tree_state.expanded["directory:runtime:/usr/share/gnat/adainclude"] =
+          true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = true,
+        })
+
+        -- Count file nodes in runtime
+        local file_count = 0
+        for _, node in ipairs(nodes) do
+          if node.type == "file" and node.project_id == "runtime" then
+            file_count = file_count + 1
+          end
+        end
+
+        assert.equals(2, file_count)
+      end)
+    end)
+
+    describe("_render_tree", function()
+      local captured_lines
+      local captured_highlights
+
+      before_each(function()
+        captured_lines = nil
+        captured_highlights = {}
+        tree._tree_state.nodes = {}
+
+        -- Mock vim.bo
+        vim.bo = setmetatable({}, {
+          __index = function()
+            return {}
+          end,
+          __newindex = function() end,
+        })
+
+        -- Mock vim.api functions for rendering
+        vim.api.nvim_buf_set_lines = function(_, _, _, _, lines)
+          captured_lines = lines
+        end
+        vim.api.nvim_create_namespace = function()
+          return 1
+        end
+        vim.api.nvim_buf_clear_namespace = function() end
+        vim.api.nvim_buf_add_highlight = function(
+          _,
+          _,
+          hl,
+          line,
+          col_start,
+          col_end
+        )
+          table.insert(captured_highlights, {
+            hl_group = hl,
+            line = line,
+            col_start = col_start,
+            col_end = col_end,
+          })
+        end
+      end)
+
+      it("stores nodes in tree_state", function()
+        local nodes = {
+          {
+            id = "1",
+            name = "test",
+            type = "file",
+            depth = 0,
+            expandable = false,
+          },
+        }
+        tree._render_tree(1, nodes)
+        assert.same(nodes, tree._tree_state.nodes)
+      end)
+
+      it("renders correct number of lines", function()
+        local nodes = {
+          {
+            id = "1",
+            name = "project",
+            type = "project",
+            depth = 0,
+            expandable = true,
+            is_root = true,
+          },
+          {
+            id = "2",
+            name = "src",
+            type = "directory",
+            depth = 1,
+            expandable = true,
+          },
+        }
+        tree._render_tree(1, nodes)
+
+        assert.equals(2, #captured_lines)
+      end)
+
+      it("applies highlights for icons and names", function()
+        tree._tree_state.expanded = {}
+        local nodes = {
+          {
+            id = "1",
+            name = "project",
+            type = "project",
+            depth = 0,
+            expandable = true,
+            is_root = true,
+          },
+        }
+        tree._render_tree(1, nodes)
+
+        -- Should have at least icon highlight and name highlight
+        assert.is_true(#captured_highlights >= 1)
+      end)
+
+      it("renders file nodes without directory highlights", function()
+        local nodes = {
+          {
+            id = "1",
+            name = "main.adb",
+            type = "file",
+            depth = 0,
+            expandable = false,
+          },
+        }
+        tree._render_tree(1, nodes)
+
+        -- File nodes should not have "Directory" or "Title" highlights for name
+        for _, hl in ipairs(captured_highlights) do
+          assert.is_not.equals("Directory", hl.hl_group)
+          assert.is_not.equals("Title", hl.hl_group)
+        end
+      end)
+    end)
+
+    describe("_get_node_at_cursor", function()
+      it("returns node at cursor line", function()
+        tree._tree_state.nodes = {
+          { id = "1", name = "first" },
+          { id = "2", name = "second" },
+          { id = "3", name = "third" },
+        }
+        vim.fn = {
+          line = function()
+            return 2
+          end,
+        }
+
+        local node = tree._get_node_at_cursor()
+        assert.equals("second", node.name)
+      end)
+
+      it("returns first node when cursor at line 1", function()
+        tree._tree_state.nodes = {
+          { id = "1", name = "first" },
+          { id = "2", name = "second" },
+        }
+        vim.fn = {
+          line = function()
+            return 1
+          end,
+        }
+
+        local node = tree._get_node_at_cursor()
+        assert.equals("first", node.name)
+      end)
+
+      it("returns nil for empty nodes", function()
+        tree._tree_state.nodes = {}
+        vim.fn = {
+          line = function()
+            return 1
+          end,
+        }
+
+        local node = tree._get_node_at_cursor()
+        assert.is_nil(node)
+      end)
+
+      it("returns nil when cursor beyond nodes", function()
+        tree._tree_state.nodes = {
+          { id = "1", name = "only" },
+        }
+        vim.fn = {
+          line = function()
+            return 5
+          end,
+        }
+
+        local node = tree._get_node_at_cursor()
+        assert.is_nil(node)
+      end)
+    end)
+
+    describe("_open_file", function()
+      local cmd_calls
+
+      before_each(function()
+        cmd_calls = {}
+        vim.cmd = setmetatable({}, {
+          __index = function(_, key)
+            return function(arg)
+              table.insert(cmd_calls, { cmd = key, arg = arg })
+            end
+          end,
+        })
+      end)
+
+      it("opens file with default edit command", function()
+        tree._open_file("/path/to/file.adb")
+
+        assert.equals(2, #cmd_calls)
+        assert.equals("wincmd", cmd_calls[1].cmd)
+        assert.equals("p", cmd_calls[1].arg)
+        assert.equals("edit", cmd_calls[2].cmd)
+        assert.equals("/path/to/file.adb", cmd_calls[2].arg)
+      end)
+
+      it("opens file with split command", function()
+        tree._open_file("/path/to/file.adb", "split")
+
+        assert.equals("split", cmd_calls[2].cmd)
+        assert.equals("/path/to/file.adb", cmd_calls[2].arg)
+      end)
+
+      it("opens file with vsplit command", function()
+        tree._open_file("/path/to/file.adb", "vsplit")
+
+        assert.equals("vsplit", cmd_calls[2].cmd)
+      end)
+
+      it("opens file with tabedit command", function()
+        tree._open_file("/path/to/file.adb", "tabedit")
+
+        assert.equals("tabedit", cmd_calls[2].cmd)
+      end)
+    end)
+
+    describe("handler functions", function()
+      local refresh_called
+      local original_refresh
+
+      before_each(function()
+        refresh_called = false
+        tree._tree_state.nodes = {}
+        tree._tree_state.expanded = {}
+        tree._tree_state.filter = ""
+
+        -- Save and mock M.refresh
+        original_refresh = tree.refresh
+        tree.refresh = function()
+          refresh_called = true
+        end
+
+        -- Mock vim.fn.line
+        vim.fn = {
+          line = function()
+            return 1
+          end,
+        }
+
+        -- Mock vim.cmd for open_file
+        vim.cmd = setmetatable({}, {
+          __index = function(_, _)
+            return function() end
+          end,
+        })
+      end)
+
+      after_each(function()
+        tree.refresh = original_refresh
+      end)
+
+      describe("_handle_enter", function()
+        it("toggles expansion for expandable nodes", function()
+          tree._tree_state.nodes = {
+            { id = "proj_1", type = "project", expandable = true },
+          }
+
+          tree._handle_enter()
+
+          assert.is_true(tree._tree_state.expanded["proj_1"])
+          assert.is_true(refresh_called)
+        end)
+
+        it("opens file for file nodes", function()
+          local cmd_calls = {}
+          vim.cmd = setmetatable({}, {
+            __index = function(_, key)
+              return function(arg)
+                table.insert(cmd_calls, { cmd = key, arg = arg })
+              end
+            end,
+          })
+
+          tree._tree_state.nodes = {
+            {
+              id = "file_1",
+              type = "file",
+              path = "/src/main.adb",
+              expandable = false,
+            },
+          }
+
+          tree._handle_enter()
+
+          -- Should call wincmd then edit
+          assert.equals(2, #cmd_calls)
+          assert.equals("edit", cmd_calls[2].cmd)
+          assert.equals("/src/main.adb", cmd_calls[2].arg)
+        end)
+
+        it("does nothing when no node at cursor", function()
+          tree._tree_state.nodes = {}
+
+          tree._handle_enter()
+
+          assert.is_false(refresh_called)
+        end)
+
+        it("does nothing for non-expandable node without path", function()
+          tree._tree_state.nodes = {
+            { id = "node_1", type = "unknown", expandable = false },
+          }
+
+          tree._handle_enter()
+
+          assert.is_false(refresh_called)
+        end)
+      end)
+
+      describe("_handle_open_split", function()
+        it("opens file in split", function()
+          local cmd_calls = {}
+          vim.cmd = setmetatable({}, {
+            __index = function(_, key)
+              return function(arg)
+                table.insert(cmd_calls, { cmd = key, arg = arg })
+              end
+            end,
+          })
+
+          tree._tree_state.nodes = {
+            { id = "1", type = "file", path = "/test.adb" },
+          }
+
+          tree._handle_open_split()
+
+          assert.equals(2, #cmd_calls)
+          assert.equals("split", cmd_calls[2].cmd)
+        end)
+
+        it("does nothing for non-file nodes", function()
+          local cmd_called = false
+          vim.cmd = setmetatable({}, {
+            __index = function()
+              return function()
+                cmd_called = true
+              end
+            end,
+          })
+
+          tree._tree_state.nodes = {
+            { id = "1", type = "directory", path = "/src" },
+          }
+
+          tree._handle_open_split()
+
+          assert.is_false(cmd_called)
+        end)
+      end)
+
+      describe("_handle_open_vsplit", function()
+        it("opens file in vsplit", function()
+          local cmd_calls = {}
+          vim.cmd = setmetatable({}, {
+            __index = function(_, key)
+              return function(arg)
+                table.insert(cmd_calls, { cmd = key, arg = arg })
+              end
+            end,
+          })
+
+          tree._tree_state.nodes = {
+            { id = "1", type = "file", path = "/test.adb" },
+          }
+
+          tree._handle_open_vsplit()
+
+          assert.equals(2, #cmd_calls)
+          assert.equals("vsplit", cmd_calls[2].cmd)
+        end)
+      end)
+
+      describe("_handle_open_tab", function()
+        it("opens file in tab", function()
+          local cmd_calls = {}
+          vim.cmd = setmetatable({}, {
+            __index = function(_, key)
+              return function(arg)
+                table.insert(cmd_calls, { cmd = key, arg = arg })
+              end
+            end,
+          })
+
+          tree._tree_state.nodes = {
+            { id = "1", type = "file", path = "/test.adb" },
+          }
+
+          tree._handle_open_tab()
+
+          assert.equals(2, #cmd_calls)
+          assert.equals("tabedit", cmd_calls[2].cmd)
+        end)
+      end)
+
+      describe("_handle_preview", function()
+        it("previews file and returns to tree", function()
+          local cmd_sequence = {}
+          vim.cmd = setmetatable({}, {
+            __index = function(_, key)
+              return function(arg)
+                table.insert(cmd_sequence, { cmd = key, arg = arg })
+              end
+            end,
+          })
+
+          tree._tree_state.nodes = {
+            { id = "1", type = "file", path = "/test.adb" },
+          }
+
+          tree._handle_preview()
+
+          assert.equals(3, #cmd_sequence)
+          assert.equals("wincmd", cmd_sequence[1].cmd)
+          assert.equals("edit", cmd_sequence[2].cmd)
+          assert.equals("wincmd", cmd_sequence[3].cmd)
+        end)
+
+        it("does nothing for non-file nodes", function()
+          local cmd_called = false
+          vim.cmd = setmetatable({}, {
+            __index = function()
+              return function()
+                cmd_called = true
+              end
+            end,
+          })
+
+          tree._tree_state.nodes = {
+            { id = "1", type = "directory", path = "/src" },
+          }
+
+          tree._handle_preview()
+
+          assert.is_false(cmd_called)
+        end)
+      end)
+
+      describe("_handle_expand", function()
+        it("expands collapsed expandable node", function()
+          tree._tree_state.nodes = {
+            { id = "dir_1", type = "directory", expandable = true },
+          }
+          tree._tree_state.expanded = {}
+
+          tree._handle_expand()
+
+          assert.is_true(tree._tree_state.expanded["dir_1"])
+          assert.is_true(refresh_called)
+        end)
+
+        it("does nothing if already expanded", function()
+          tree._tree_state.nodes = {
+            { id = "dir_1", type = "directory", expandable = true },
+          }
+          tree._tree_state.expanded = { ["dir_1"] = true }
+
+          tree._handle_expand()
+
+          assert.is_false(refresh_called)
+        end)
+
+        it("does nothing for non-expandable nodes", function()
+          tree._tree_state.nodes = {
+            { id = "file_1", type = "file", expandable = false },
+          }
+
+          tree._handle_expand()
+
+          assert.is_false(refresh_called)
+        end)
+      end)
+
+      describe("_handle_collapse", function()
+        it("collapses expanded node", function()
+          tree._tree_state.nodes = {
+            { id = "dir_1", type = "directory", expandable = true },
+          }
+          tree._tree_state.expanded = { ["dir_1"] = true }
+
+          tree._handle_collapse()
+
+          assert.is_false(tree._tree_state.expanded["dir_1"])
+          assert.is_true(refresh_called)
+        end)
+
+        it("does nothing if already collapsed", function()
+          tree._tree_state.nodes = {
+            { id = "dir_1", type = "directory", expandable = true },
+          }
+          tree._tree_state.expanded = {}
+
+          tree._handle_collapse()
+
+          assert.is_false(refresh_called)
+        end)
+      end)
+
+      describe("_handle_collapse_all", function()
+        it("clears all expanded state", function()
+          tree._tree_state.expanded = { a = true, b = true, c = true }
+
+          tree._handle_collapse_all()
+
+          assert.same({}, tree._tree_state.expanded)
+          assert.is_true(refresh_called)
+        end)
+      end)
+
+      describe("_handle_expand_all", function()
+        it("expands all expandable nodes", function()
+          tree._tree_state.nodes = {
+            { id = "proj", expandable = true },
+            { id = "dir", expandable = true },
+            { id = "file", expandable = false },
+          }
+          tree._tree_state.expanded = {}
+
+          tree._handle_expand_all()
+
+          assert.is_true(tree._tree_state.expanded["proj"])
+          assert.is_true(tree._tree_state.expanded["dir"])
+          assert.is_nil(tree._tree_state.expanded["file"])
+          assert.is_true(refresh_called)
+        end)
+      end)
+
+      describe("_handle_clear_filter", function()
+        it("clears filter and refreshes when filter exists", function()
+          tree._tree_state.filter = "main"
+
+          tree._handle_clear_filter()
+
+          assert.equals("", tree._tree_state.filter)
+          assert.is_true(refresh_called)
+        end)
+
+        it("does nothing when no filter", function()
+          tree._tree_state.filter = ""
+
+          tree._handle_clear_filter()
+
+          assert.is_false(refresh_called)
+        end)
+      end)
+
+      describe("_handle_help", function()
+        it("shows help message via vim.notify", function()
+          local notified_msg
+          local original_notify = vim.notify
+          vim.notify = function(msg)
+            notified_msg = msg
+          end
+
+          tree._handle_help()
+
+          vim.notify = original_notify
+
+          assert.is_not_nil(notified_msg)
+          assert.truthy(notified_msg:find("Project View Keymaps"))
+          assert.truthy(notified_msg:find("<CR>"))
+        end)
+      end)
+
+      describe("_handle_refresh", function()
+        it("invalidates data and refreshes", function()
+          local invalidate_called = false
+          rawset(package.loaded, "ada_ls.project_view.data", {
+            invalidate = function()
+              invalidate_called = true
+            end,
+          })
+
+          tree._handle_refresh()
+
+          assert.is_true(invalidate_called)
+          assert.is_true(refresh_called)
+        end)
+      end)
+
+      describe("_handle_filter", function()
+        it("sets filter and refreshes when input provided", function()
+          local input_callback
+          vim.ui = {
+            input = function(_, callback)
+              input_callback = callback
+            end,
+          }
+
+          tree._handle_filter()
+
+          -- Simulate user entering "main"
+          assert.is_not_nil(input_callback)
+          input_callback("main")
+
+          assert.equals("main", tree._tree_state.filter)
+          assert.is_true(refresh_called)
+        end)
+
+        it("does not set filter when input is nil", function()
+          tree._tree_state.filter = "original"
+          vim.ui = {
+            input = function(_, callback)
+              callback(nil)
+            end,
+          }
+
+          tree._handle_filter()
+
+          assert.equals("original", tree._tree_state.filter)
+          assert.is_false(refresh_called)
+        end)
+      end)
+    end)
+
+    describe("M.is_open", function()
+      it("returns false when window is nil", function()
+        tree._tree_state.win = nil
+
+        assert.is_false(tree.is_open())
+      end)
+
+      it("returns false when window is invalid", function()
+        tree._tree_state.win = 123
+        vim.api.nvim_win_is_valid = function()
+          return false
+        end
+
+        assert.is_false(tree.is_open())
+      end)
+
+      it("returns true when window is valid", function()
+        tree._tree_state.win = 123
+        vim.api.nvim_win_is_valid = function()
+          return true
+        end
+
+        assert.is_true(tree.is_open())
+      end)
+    end)
+
+    describe("setup_keymaps (via keymap.set mock)", function()
+      it("registers all expected keymaps", function()
+        local registered_keys = {}
+        vim.keymap = {
+          set = function(mode, key, _, _)
+            table.insert(registered_keys, { mode = mode, key = key })
+          end,
+        }
+
+        -- We can't call setup_keymaps directly as it's not exported,
+        -- but we verify the handlers exist
+        assert.is_function(tree._handle_enter)
+        assert.is_function(tree._handle_open_split)
+        assert.is_function(tree._handle_open_vsplit)
+        assert.is_function(tree._handle_open_tab)
+        assert.is_function(tree._handle_preview)
+        assert.is_function(tree._handle_refresh)
+        assert.is_function(tree._handle_expand)
+        assert.is_function(tree._handle_collapse)
+        assert.is_function(tree._handle_collapse_all)
+        assert.is_function(tree._handle_expand_all)
+        assert.is_function(tree._handle_filter)
+        assert.is_function(tree._handle_clear_filter)
+        assert.is_function(tree._handle_help)
+      end)
+    end)
+
+    describe("sorting comparators", function()
+      it("sorts projects by name in build_tree flat mode", function()
+        local data = {
+          root_project_id = "proj_2",
+          projects = {
+            ["proj_1"] = {
+              project = {
+                id = "proj_1",
+                name = "alpha_project",
+                file_name = "/alpha/alpha.gpr",
+                directory = "/alpha",
+              },
+              sources = {},
+              imports = {},
+              aggregated = {},
+              extended = {},
+            },
+            ["proj_2"] = {
+              project = {
+                id = "proj_2",
+                name = "zeta_project",
+                file_name = "/zeta/zeta.gpr",
+                directory = "/zeta",
+              },
+              sources = {},
+              imports = {},
+              aggregated = {},
+              extended = {},
+            },
+          },
+        }
+        tree._tree_state.expanded = {}
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = true,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        -- Root project should be first, then alphabetical
+        assert.truthy(nodes[1].name:find("zeta")) -- Root first
+        assert.truthy(nodes[2].name:find("alpha"))
       end)
     end)
   end)

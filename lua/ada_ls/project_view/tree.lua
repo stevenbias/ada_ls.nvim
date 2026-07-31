@@ -541,150 +541,156 @@ local function open_file(path, cmd)
   vim.cmd[cmd](path)
 end
 
+-- Keymap handler: Open file or toggle expand
+local function handle_enter()
+  local node = get_node_at_cursor()
+  if not node then
+    return
+  end
+  if node.expandable then
+    toggle_expanded(node.id)
+    M.refresh()
+  elseif node.path then
+    open_file(node.path)
+  end
+end
+
+-- Keymap handler: Open in split
+local function handle_open_split()
+  local node = get_node_at_cursor()
+  if node and node.type == "file" and node.path then
+    open_file(node.path, "split")
+  end
+end
+
+-- Keymap handler: Open in vsplit
+local function handle_open_vsplit()
+  local node = get_node_at_cursor()
+  if node and node.type == "file" and node.path then
+    open_file(node.path, "vsplit")
+  end
+end
+
+-- Keymap handler: Open in tab
+local function handle_open_tab()
+  local node = get_node_at_cursor()
+  if node and node.type == "file" and node.path then
+    open_file(node.path, "tabedit")
+  end
+end
+
+-- Keymap handler: Preview file
+local function handle_preview()
+  local node = get_node_at_cursor()
+  if node and node.type == "file" and node.path then
+    vim.cmd.wincmd("p")
+    vim.cmd.edit(node.path)
+    vim.cmd.wincmd("p")
+  end
+end
+
+-- Keymap handler: Refresh tree
+local function handle_refresh()
+  require("ada_ls.project_view.data").invalidate()
+  M.refresh()
+end
+
+-- Keymap handler: Expand node
+local function handle_expand()
+  local node = get_node_at_cursor()
+  if node and node.expandable and not is_expanded(node.id) then
+    toggle_expanded(node.id)
+    M.refresh()
+  end
+end
+
+-- Keymap handler: Collapse node
+local function handle_collapse()
+  local node = get_node_at_cursor()
+  if node and node.expandable and is_expanded(node.id) then
+    toggle_expanded(node.id)
+    M.refresh()
+  end
+end
+
+-- Keymap handler: Collapse all
+local function handle_collapse_all()
+  tree_state.expanded = {}
+  M.refresh()
+end
+
+-- Keymap handler: Expand all
+local function handle_expand_all()
+  for _, node in ipairs(tree_state.nodes) do
+    if node.expandable then
+      tree_state.expanded[node.id] = true
+    end
+  end
+  M.refresh()
+end
+
+-- Keymap handler: Filter
+local function handle_filter()
+  vim.ui.input({ prompt = "Filter: " }, function(input)
+    if input then
+      tree_state.filter = input
+      M.refresh()
+    end
+  end)
+end
+
+-- Keymap handler: Clear filter
+local function handle_clear_filter()
+  if tree_state.filter ~= "" then
+    tree_state.filter = ""
+    M.refresh()
+  end
+end
+
+-- Keymap handler: Show help
+local function handle_help()
+  local help = {
+    "Project View Keymaps:",
+    "",
+    "<CR>    Open file / toggle expand",
+    "o       Open in horizontal split",
+    "v       Open in vertical split",
+    "t       Open in new tab",
+    "p       Preview file",
+    "r       Refresh tree",
+    "R       Reveal current file",
+    "zo      Expand node",
+    "zc      Collapse node",
+    "zM      Collapse all",
+    "zR      Expand all",
+    "/       Filter",
+    "<Esc>   Clear filter",
+    "q       Close tree",
+    "g?      Show this help",
+  }
+  vim.notify(table.concat(help, "\n"), vim.log.levels.INFO)
+end
+
 --- Set up keymaps for tree buffer
 ---@param buf number
 local function setup_keymaps(buf)
   local opts = { buffer = buf, nowait = true, silent = true }
 
-  -- Open file / toggle expand
-  vim.keymap.set("n", "<CR>", function()
-    local node = get_node_at_cursor()
-    if not node then
-      return
-    end
-    if node.expandable then
-      toggle_expanded(node.id)
-      M.refresh()
-    elseif node.path then
-      open_file(node.path)
-    end
-  end, opts)
-
-  -- Open in split
-  vim.keymap.set("n", "o", function()
-    local node = get_node_at_cursor()
-    if node and node.type == "file" and node.path then
-      open_file(node.path, "split")
-    end
-  end, opts)
-
-  -- Open in vsplit
-  vim.keymap.set("n", "v", function()
-    local node = get_node_at_cursor()
-    if node and node.type == "file" and node.path then
-      open_file(node.path, "vsplit")
-    end
-  end, opts)
-
-  -- Open in tab
-  vim.keymap.set("n", "t", function()
-    local node = get_node_at_cursor()
-    if node and node.type == "file" and node.path then
-      open_file(node.path, "tabedit")
-    end
-  end, opts)
-
-  -- Preview (open without leaving tree)
-  vim.keymap.set("n", "p", function()
-    local node = get_node_at_cursor()
-    if node and node.type == "file" and node.path then
-      vim.cmd.wincmd("p")
-      vim.cmd.edit(node.path)
-      vim.cmd.wincmd("p")
-    end
-  end, opts)
-
-  -- Refresh
-  vim.keymap.set("n", "r", function()
-    require("ada_ls.project_view.data").invalidate()
-    M.refresh()
-  end, opts)
-
-  -- Reveal current file
-  vim.keymap.set("n", "R", function()
-    M.reveal_current_file()
-  end, opts)
-
-  -- Expand node
-  vim.keymap.set("n", "zo", function()
-    local node = get_node_at_cursor()
-    if node and node.expandable and not is_expanded(node.id) then
-      toggle_expanded(node.id)
-      M.refresh()
-    end
-  end, opts)
-
-  -- Collapse node
-  vim.keymap.set("n", "zc", function()
-    local node = get_node_at_cursor()
-    if node and node.expandable and is_expanded(node.id) then
-      toggle_expanded(node.id)
-      M.refresh()
-    end
-  end, opts)
-
-  -- Collapse all
-  vim.keymap.set("n", "zM", function()
-    tree_state.expanded = {}
-    M.refresh()
-  end, opts)
-
-  -- Expand all
-  vim.keymap.set("n", "zR", function()
-    for _, node in ipairs(tree_state.nodes) do
-      if node.expandable then
-        tree_state.expanded[node.id] = true
-      end
-    end
-    M.refresh()
-  end, opts)
-
-  -- Filter
-  vim.keymap.set("n", "/", function()
-    vim.ui.input({ prompt = "Filter: " }, function(input)
-      if input then
-        tree_state.filter = input
-        M.refresh()
-      end
-    end)
-  end, opts)
-
-  -- Clear filter
-  vim.keymap.set("n", "<Esc>", function()
-    if tree_state.filter ~= "" then
-      tree_state.filter = ""
-      M.refresh()
-    end
-  end, opts)
-
-  -- Close
-  vim.keymap.set("n", "q", function()
-    M.close()
-  end, opts)
-
-  -- Help
-  vim.keymap.set("n", "g?", function()
-    local help = {
-      "Project View Keymaps:",
-      "",
-      "<CR>    Open file / toggle expand",
-      "o       Open in horizontal split",
-      "v       Open in vertical split",
-      "t       Open in new tab",
-      "p       Preview file",
-      "r       Refresh tree",
-      "R       Reveal current file",
-      "zo      Expand node",
-      "zc      Collapse node",
-      "zM      Collapse all",
-      "zR      Expand all",
-      "/       Filter",
-      "<Esc>   Clear filter",
-      "q       Close tree",
-      "g?      Show this help",
-    }
-    vim.notify(table.concat(help, "\n"), vim.log.levels.INFO)
-  end, opts)
+  vim.keymap.set("n", "<CR>", handle_enter, opts)
+  vim.keymap.set("n", "o", handle_open_split, opts)
+  vim.keymap.set("n", "v", handle_open_vsplit, opts)
+  vim.keymap.set("n", "t", handle_open_tab, opts)
+  vim.keymap.set("n", "p", handle_preview, opts)
+  vim.keymap.set("n", "r", handle_refresh, opts)
+  vim.keymap.set("n", "R", M.reveal_current_file, opts)
+  vim.keymap.set("n", "zo", handle_expand, opts)
+  vim.keymap.set("n", "zc", handle_collapse, opts)
+  vim.keymap.set("n", "zM", handle_collapse_all, opts)
+  vim.keymap.set("n", "zR", handle_expand_all, opts)
+  vim.keymap.set("n", "/", handle_filter, opts)
+  vim.keymap.set("n", "<Esc>", handle_clear_filter, opts)
+  vim.keymap.set("n", "q", M.close, opts)
+  vim.keymap.set("n", "g?", handle_help, opts)
 end
 
 --- Check if tree is currently open
@@ -859,6 +865,31 @@ if os.getenv("ADA_LS_TEST_MODE") then
   M._filter_nodes = filter_nodes
   M._make_node_id = make_node_id
   M._get_relative_path = get_relative_path
+  M._build_tree_prefix = build_tree_prefix
+  M._tree_chars = tree_chars
+  M._safe_basename = safe_basename
+  M._toggle_expanded = toggle_expanded
+  M._is_expanded = is_expanded
+  M._get_node_icon = get_node_icon
+  M._icons = icons
+  -- Internal functions
+  M._render_tree = render_tree
+  M._get_node_at_cursor = get_node_at_cursor
+  M._open_file = open_file
+  -- Handler functions
+  M._handle_enter = handle_enter
+  M._handle_open_split = handle_open_split
+  M._handle_open_vsplit = handle_open_vsplit
+  M._handle_open_tab = handle_open_tab
+  M._handle_preview = handle_preview
+  M._handle_refresh = handle_refresh
+  M._handle_expand = handle_expand
+  M._handle_collapse = handle_collapse
+  M._handle_collapse_all = handle_collapse_all
+  M._handle_expand_all = handle_expand_all
+  M._handle_filter = handle_filter
+  M._handle_clear_filter = handle_clear_filter
+  M._handle_help = handle_help
 end
 
 return M
