@@ -33,7 +33,7 @@ function M.send_command(cmd, args, timeout)
 
   local params = {
     command = cmd,
-    arguments = { args },
+    arguments = args and { args } or vim.empty_dict(),
   }
   local result, err
   client:request("workspace/executeCommand", params, function(e, r)
@@ -95,6 +95,10 @@ end
 
 function M.get_obj_dir()
   return M.send_command("als-object-dir", nil, 1500)
+end
+
+function M.get_project_view_info()
+  return M.send_command("als-project-view-information", nil, 5000)
 end
 
 return M
