@@ -148,6 +148,37 @@ function M.clear()
   M.server_project_name = nil
 end
 
+--- Get path relative to a base directory
+--- Returns the relative path if inside base, or basename as fallback
+---@param path string The full path
+---@param base_dir string The base directory to compute relative path from
+---@return string The relative path or basename
+function M.get_relative_path(path, base_dir)
+  if not path or path == "" then
+    return ""
+  end
+  if not base_dir or base_dir == "" then
+    local normalized = path:gsub("/+$", "")
+    return vim.fs.basename(normalized) or ""
+  end
+
+  -- Normalize paths (strip trailing slashes)
+  local norm_path = path:gsub("/+$", "")
+  local norm_base = base_dir:gsub("/+$", "")
+
+  -- Check if path starts with base_dir
+  if norm_path:sub(1, #norm_base) == norm_base then
+    local relative = norm_path:sub(#norm_base + 1):gsub("^/", "")
+    if relative == "" then
+      return "."
+    end
+    return relative
+  end
+
+  -- Path is outside base directory - show basename as fallback
+  return vim.fs.basename(norm_path) or ""
+end
+
 -- Test-specific exports - only exposed in test mode
 if os.getenv("ADA_LS_TEST_MODE") then
   M._log_lvl_tostring = log_lvl_tostring
