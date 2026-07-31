@@ -77,6 +77,14 @@ EOF
 | `:Als other` | Go to corresponding .ads/.adb file |
 | `:Als pick_gpr` | Select GPR file via Telescope picker |
 
+#### Project View commands (ALS 2026.3+)
+| Command | Description |
+|---------|-------------|
+| `:Als project_view` | Toggle project tree buffer |
+| `:Als project_files` | Select source file via Telescope picker |
+| `:Als project_view_options` | Configure view options (flat mode, runtime, etc.) |
+| `:Als reveal` | Reveal current file in project tree |
+
 #### Spark commands
 | Command | Description |
 |---------|-------------|
@@ -96,6 +104,9 @@ vim.keymap.set("n", "<leader>aj", "<cmd>Als config<cr>", { desc = "Als JSON conf
 vim.keymap.set("n", "<leader>ap", "<cmd>Als edit_gpr<cr>", { desc = "Als edit project file" })
 vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick gpr" })
 vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als other file" })
+vim.keymap.set("n", "<leader>av", "<cmd>Als project_view<cr>", { desc = "Als project view" })
+vim.keymap.set("n", "<leader>af", "<cmd>Als project_files<cr>", { desc = "Als project files" })
+vim.keymap.set("n", "<leader>ar", "<cmd>Als reveal<cr>", { desc = "Als reveal in tree" })
 ```
 #### Spark keymaps
 ```lua
@@ -113,7 +124,7 @@ This plugin removes the following useless default Ada keymaps:
 | Keymap | Mode | Description |
 |--------|------|-------------|
 | `<leader>aj` | normal | Removed |
-| `<leader>al` | insert | Removed |
+| `<leader>al` | normal, insert | Removed |
 
 ## GPR File Support
 
