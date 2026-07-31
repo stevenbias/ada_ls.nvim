@@ -15,6 +15,10 @@ function M.cleanup_packages()
   package.preload["ada_ls.spark.config"] = nil
   package.preload["ada_ls.lspconfig"] = nil
   package.preload["ada_ls.refactoring"] = nil
+  package.preload["ada_ls.project_view"] = nil
+  package.preload["ada_ls.project_view.data"] = nil
+  package.preload["ada_ls.project_view.telescope"] = nil
+  package.preload["ada_ls.project_view.tree"] = nil
   -- Then clear loaded modules
   package.loaded["ada_ls"] = nil
   package.loaded["ada_ls.utils"] = nil
@@ -25,6 +29,10 @@ function M.cleanup_packages()
   package.loaded["ada_ls.spark.config"] = nil
   package.loaded["ada_ls.lspconfig"] = nil
   package.loaded["ada_ls.refactoring"] = nil
+  package.loaded["ada_ls.project_view"] = nil
+  package.loaded["ada_ls.project_view.data"] = nil
+  package.loaded["ada_ls.project_view.telescope"] = nil
+  package.loaded["ada_ls.project_view.tree"] = nil
 end
 
 -- Vim API mocking
@@ -381,6 +389,84 @@ function M.setup_spark_mock(opts)
     save_state = stub.new(),
   }
   rawset(package.loaded, "ada_ls.spark", mock)
+  return mock
+end
+
+-- Create a mock ALS project view response
+---@param opts? { root_name?: string, projects?: table[], runtime?: table }
+---@return table
+function M.create_project_view_response(opts)
+  opts = opts or {}
+  local root_name = opts.root_name or "main_project"
+  local root_id = opts.root_id or "proj_" .. root_name
+
+  -- Default project entry
+  local default_project = {
+    project = {
+      id = root_id,
+      name = root_name,
+      kind = "standard",
+      qualifier = "default",
+      ["simple-name"] = root_name .. ".gpr",
+      ["file-name"] = "/project/" .. root_name .. ".gpr",
+      directory = "/project",
+      ["is-externally-built"] = false,
+      languages = { "ada" },
+      ["source-directories"] = { "/project/src" },
+      ["object-directory"] = "/project/obj",
+    },
+    imports = {},
+    aggregated = {},
+    extended = {},
+    ["imported-by"] = {},
+    sources = {
+      {
+        ["file-name"] = "/project/src/main.adb",
+        ["simple-name"] = "main.adb",
+        directory = "/project/src",
+        language = "ada",
+      },
+      {
+        ["file-name"] = "/project/src/utils.ads",
+        ["simple-name"] = "utils.ads",
+        directory = "/project/src",
+        language = "ada",
+      },
+    },
+  }
+
+  local projects = opts.projects or { default_project }
+
+  local response = {
+    tree = {
+      ["root-project"] = { id = root_id },
+    },
+    projects = projects,
+  }
+
+  if opts.runtime then
+    response["runtime-project"] = opts.runtime
+  end
+
+  return response
+end
+
+-- Setup mock for lsp_cmd with project view support
+---@param response? table ALS response (nil = command not supported)
+---@param err? string Error message
+function M.setup_lsp_cmd_project_view_mock(response, err)
+  local mock = {
+    get_project_view_info = function()
+      if err then
+        return nil, err
+      end
+      return response
+    end,
+    get_root_dir = function()
+      return "/project"
+    end,
+  }
+  rawset(package.loaded, "ada_ls.lsp_cmd", mock)
   return mock
 end
 
