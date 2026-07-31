@@ -148,6 +148,27 @@ function M.clear()
   M.server_project_name = nil
 end
 
+--- Normalize a path by stripping trailing slashes
+---@param path string
+---@return string
+function M.normalize_path(path)
+  if not path or path == "" then
+    return ""
+  end
+  -- Strip trailing slashes (but keep root "/" intact)
+  return path:gsub("/+$", "")
+end
+
+--- Get basename safely, handling trailing slashes
+---@param path string
+---@return string
+function M.safe_basename(path)
+  if not path or path == "" then
+    return ""
+  end
+  return vim.fs.basename(M.normalize_path(path)) or ""
+end
+
 --- Get path relative to a base directory
 --- Returns the relative path if inside base, or basename as fallback
 ---@param path string The full path

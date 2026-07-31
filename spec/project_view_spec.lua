@@ -891,55 +891,6 @@ if os.getenv("ADA_LS_TEST_MODE") then
       common.cleanup_packages()
     end)
 
-    describe("_get_relative_path", function()
-      it("returns relative path when inside base directory", function()
-        local result = tree._get_relative_path("/project/src", "/project")
-        assert.equals("src", result)
-      end)
-
-      it("returns nested relative path", function()
-        local result =
-          tree._get_relative_path("/project/src/engine", "/project")
-        assert.equals("src/engine", result)
-      end)
-
-      it("returns '.' when path equals base directory", function()
-        local result = tree._get_relative_path("/project", "/project")
-        assert.equals(".", result)
-      end)
-
-      it("returns basename when path is outside base directory", function()
-        local result =
-          tree._get_relative_path("/usr/share/gnat/adalib", "/project")
-        assert.equals("adalib", result)
-      end)
-
-      it("handles trailing slashes in path", function()
-        local result = tree._get_relative_path("/project/src/", "/project")
-        assert.equals("src", result)
-      end)
-
-      it("handles trailing slashes in base directory", function()
-        local result = tree._get_relative_path("/project/src", "/project/")
-        assert.equals("src", result)
-      end)
-
-      it("handles empty path", function()
-        local result = tree._get_relative_path("", "/project")
-        assert.equals("", result)
-      end)
-
-      it("handles empty base directory", function()
-        local result = tree._get_relative_path("/project/src", "")
-        assert.equals("src", result)
-      end)
-
-      it("handles nil values", function()
-        local result = tree._get_relative_path(nil, "/project")
-        assert.equals("", result)
-      end)
-    end)
-
     describe("_make_node_id", function()
       it("generates correct format type:project_id:path", function()
         local result = tree._make_node_id("file", "/src/main.adb", "proj_1")
@@ -962,6 +913,52 @@ if os.getenv("ADA_LS_TEST_MODE") then
         local id1 = tree._make_node_id("file", "/src/main.adb", "proj_1")
         local id2 = tree._make_node_id("file", "/src/main.adb", "proj_2")
         assert.is_not.equals(id1, id2)
+      end)
+    end)
+
+    describe("_group_sources_by_dir", function()
+      it("groups sources by directory", function()
+        local sources = {
+          { directory = "/src", simple_name = "main.adb" },
+          { directory = "/src", simple_name = "utils.adb" },
+          { directory = "/tests", simple_name = "test.adb" },
+        }
+        local dirs, sorted = tree._group_sources_by_dir(sources)
+
+        assert.equals(2, #sorted)
+        assert.equals(2, #dirs["/src"])
+        assert.equals(1, #dirs["/tests"])
+      end)
+
+      it("returns sorted directory list", function()
+        local sources = {
+          { directory = "/zeta", simple_name = "z.adb" },
+          { directory = "/alpha", simple_name = "a.adb" },
+          { directory = "/middle", simple_name = "m.adb" },
+        }
+        local _, sorted = tree._group_sources_by_dir(sources)
+
+        assert.equals("/alpha", sorted[1])
+        assert.equals("/middle", sorted[2])
+        assert.equals("/zeta", sorted[3])
+      end)
+
+      it("handles empty sources array", function()
+        local dirs, sorted = tree._group_sources_by_dir({})
+
+        assert.equals(0, #sorted)
+        assert.is_table(dirs)
+      end)
+
+      it("handles single source", function()
+        local sources = {
+          { directory = "/src", simple_name = "main.adb" },
+        }
+        local dirs, sorted = tree._group_sources_by_dir(sources)
+
+        assert.equals(1, #sorted)
+        assert.equals("/src", sorted[1])
+        assert.equals(1, #dirs["/src"])
       end)
     end)
 
@@ -1454,33 +1451,6 @@ if os.getenv("ADA_LS_TEST_MODE") then
         local result = tree._build_tree_prefix(4, nodes)
         -- Depth 3 node should have prefix for depth 1 and 2
         assert.is_true(#result > #tree._tree_chars.last)
-      end)
-    end)
-
-    describe("_safe_basename", function()
-      it("returns empty string for nil input", function()
-        local result = tree._safe_basename(nil)
-        assert.equals("", result)
-      end)
-
-      it("returns empty string for empty string input", function()
-        local result = tree._safe_basename("")
-        assert.equals("", result)
-      end)
-
-      it("returns basename of path", function()
-        local result = tree._safe_basename("/project/src/main.adb")
-        assert.equals("main.adb", result)
-      end)
-
-      it("handles trailing slashes", function()
-        local result = tree._safe_basename("/project/src/")
-        assert.equals("src", result)
-      end)
-
-      it("handles multiple trailing slashes", function()
-        local result = tree._safe_basename("/project/src///")
-        assert.equals("src", result)
       end)
     end)
 

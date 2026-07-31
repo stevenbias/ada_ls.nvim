@@ -40,60 +40,40 @@ local cache = {
 ---@field projects table<string, ProjectEntry> Map of project ID to entry
 ---@field runtime_project? ProjectEntry Optional runtime project
 
---- Get a value from a table, trying multiple key formats
+--- Get a value from a table, trying snake_case and kebab-case formats
+--- ALS uses kebab-case in JSON responses (e.g., "file-name")
 ---@param tbl table
----@param key string Base key name (e.g., "file_name")
+---@param key string Base key name in snake_case (e.g., "file_name")
 ---@param default? any Default value if not found
 ---@return any
 local function get_flexible(tbl, key, default)
   if not tbl then
     return default
   end
-  -- Try the key as-is first
+  -- Try the key as-is first (snake_case)
   if tbl[key] ~= nil then
     return tbl[key]
   end
-  -- Try kebab-case (file-name)
+  -- Try kebab-case (file-name) - ALS JSON format
   local kebab = key:gsub("_", "-")
   if tbl[kebab] ~= nil then
     return tbl[kebab]
   end
-  -- Try camelCase (fileName)
-  local camel = key:gsub("_(%l)", function(c)
-    return c:upper()
-  end)
-  if tbl[camel] ~= nil then
-    return tbl[camel]
-  end
-  -- Try with common prefixes removed
-  if tbl[key:gsub("^is_", "")] ~= nil then
-    return tbl[key:gsub("^is_", "")]
-  end
   return default
-end
-
---- Normalize a path by stripping trailing slashes
----@param path string
----@return string
-local function normalize_path(path)
-  if not path or path == "" then
-    return ""
-  end
-  -- Strip trailing slashes (but keep root "/" intact)
-  return path:gsub("/+$", "")
 end
 
 --- Parse a raw source info from ALS response
 ---@param raw table Raw source info
 ---@return ProjectSource
 local function parse_source(raw)
+  local utils = require("ada_ls.utils")
   -- Try to extract directory from file path if not provided
   local file_name = get_flexible(raw, "file_name", "")
   local directory = get_flexible(raw, "directory", "")
 
   -- Normalize paths (strip trailing slashes)
-  file_name = normalize_path(file_name)
-  directory = normalize_path(directory)
+  file_name = utils.normalize_path(file_name)
+  directory = utils.normalize_path(directory)
 
   -- If directory is empty but we have a file path, extract it
   if directory == "" and file_name ~= "" then
@@ -118,12 +98,13 @@ end
 ---@param raw table Raw project info
 ---@return ProjectInfo
 local function parse_project_info(raw)
+  local utils = require("ada_ls.utils")
   local file_name = get_flexible(raw, "file_name", "")
   local directory = get_flexible(raw, "directory", "")
 
   -- Normalize paths (strip trailing slashes)
-  file_name = normalize_path(file_name)
-  directory = normalize_path(directory)
+  file_name = utils.normalize_path(file_name)
+  directory = utils.normalize_path(directory)
 
   -- Extract directory from file path if not provided
   if directory == "" and file_name ~= "" then
@@ -132,7 +113,7 @@ local function parse_project_info(raw)
 
   local object_dir = get_flexible(raw, "object_directory")
   if object_dir then
-    object_dir = normalize_path(object_dir)
+    object_dir = utils.normalize_path(object_dir)
   end
 
   return {

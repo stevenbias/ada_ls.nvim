@@ -347,4 +347,59 @@ describe("ada_ls.utils", function()
       )
     end)
   end)
+
+  describe("normalize_path", function()
+    it("returns empty string for nil input", function()
+      assert.equals("", utils.normalize_path(nil))
+    end)
+
+    it("returns empty string for empty input", function()
+      assert.equals("", utils.normalize_path(""))
+    end)
+
+    it("returns path unchanged when no trailing slash", function()
+      assert.equals("/project/src", utils.normalize_path("/project/src"))
+    end)
+
+    it("strips single trailing slash", function()
+      assert.equals("/project/src", utils.normalize_path("/project/src/"))
+    end)
+
+    it("strips multiple trailing slashes", function()
+      assert.equals("/project/src", utils.normalize_path("/project/src///"))
+    end)
+
+    it("preserves internal slashes", function()
+      assert.equals(
+        "/project/src/dir",
+        utils.normalize_path("/project/src/dir")
+      )
+    end)
+  end)
+
+  describe("safe_basename", function()
+    it("returns empty string for nil input", function()
+      assert.equals("", utils.safe_basename(nil))
+    end)
+
+    it("returns empty string for empty input", function()
+      assert.equals("", utils.safe_basename(""))
+    end)
+
+    it("returns basename for normal path", function()
+      assert.equals("file.adb", utils.safe_basename("/project/src/file.adb"))
+    end)
+
+    it("returns directory name for directory path", function()
+      assert.equals("src", utils.safe_basename("/project/src"))
+    end)
+
+    it("handles trailing slash correctly", function()
+      assert.equals("src", utils.safe_basename("/project/src/"))
+    end)
+
+    it("handles multiple trailing slashes", function()
+      assert.equals("src", utils.safe_basename("/project/src///"))
+    end)
+  end)
 end)

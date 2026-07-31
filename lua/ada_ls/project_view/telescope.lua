@@ -1,11 +1,6 @@
 -- Telescope integration for Project View
 local M = {}
 
---- Get path relative to a base directory (uses shared utils implementation)
-local function get_relative_path(path, base_dir)
-  return require("ada_ls.utils").get_relative_path(path, base_dir)
-end
-
 --- Pick a source file from the project using Telescope
 ---@param opts? { include_runtime: boolean }
 function M.pick_file(opts)
@@ -107,7 +102,7 @@ function M.pick_file(opts)
 
   local make_display = function(entry)
     local item = entry.value
-    local dir = get_relative_path(item.directory, item.project_directory)
+    local dir = utils.get_relative_path(item.directory, item.project_directory)
     return displayer({
       item.display,
       { "[" .. item.project_name .. "]", "TelescopeResultsComment" },

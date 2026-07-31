@@ -33,23 +33,6 @@ local icons = {
 -- Try to load devicons for file icons
 local has_devicons, devicons = pcall(require, "nvim-web-devicons")
 
---- Get basename safely, handling trailing slashes
----@param path string
----@return string
-local function safe_basename(path)
-  if not path or path == "" then
-    return ""
-  end
-  -- Strip trailing slashes before getting basename
-  local normalized = path:gsub("/+$", "")
-  return vim.fs.basename(normalized) or ""
-end
-
---- Get path relative to a base directory (uses shared utils implementation)
-local function get_relative_path(path, base_dir)
-  return require("ada_ls.utils").get_relative_path(path, base_dir)
-end
-
 ---@class TreeNode
 ---@field id string Unique node ID
 ---@field type "project"|"directory"|"file"|"object_dir"|"runtime"
@@ -89,7 +72,9 @@ end
 local function get_file_icon(filename)
   if has_devicons then
     local icon, hl = devicons.get_icon(filename, nil, { default = true })
-    return icon or icons.file, hl
+    if icon then
+      return icon .. " ", hl -- Add trailing space after devicon
+    end
   end
   return icons.file, nil
 end
@@ -118,6 +103,24 @@ local function get_node_icon(node)
       "Comment"
   end
   return " ", nil
+end
+
+--- Group sources by directory
+---@param sources table[] List of source objects with 'directory' field
+---@return table<string, table[]> dirs Map of directory to sources
+---@return string[] sorted_dirs Sorted list of directories
+local function group_sources_by_dir(sources)
+  local dirs = {}
+  for _, source in ipairs(sources) do
+    local dir = source.directory
+    if not dirs[dir] then
+      dirs[dir] = {}
+    end
+    table.insert(dirs[dir], source)
+  end
+  local sorted_dirs = vim.tbl_keys(dirs)
+  table.sort(sorted_dirs)
+  return dirs, sorted_dirs
 end
 
 --- Build tree nodes from project data
@@ -149,26 +152,13 @@ local function build_tree(data, opts)
 
     if is_expanded(project_id) then
       -- Group sources by directory
-      local dirs = {}
-      for _, source in ipairs(entry.sources) do
-        local dir = source.directory
-        if not dirs[dir] then
-          dirs[dir] = {}
-        end
-        table.insert(dirs[dir], source)
-      end
-
-      -- Sort directories
-      local dir_list = {}
-      for dir, _ in pairs(dirs) do
-        table.insert(dir_list, dir)
-      end
-      table.sort(dir_list)
+      local dirs, dir_list = group_sources_by_dir(entry.sources)
 
       -- Add directory nodes
       for _, dir in ipairs(dir_list) do
         local dir_id = make_node_id("directory", dir, project.id)
-        local dir_name = get_relative_path(dir, project.directory)
+        local dir_name =
+          require("ada_ls.utils").get_relative_path(dir, project.directory)
 
         local dir_node = {
           id = dir_id,
@@ -210,7 +200,8 @@ local function build_tree(data, opts)
         table.insert(nodes, {
           id = obj_id,
           type = "object_dir",
-          name = safe_basename(project.object_dir) .. " (obj)",
+          name = require("ada_ls.utils").safe_basename(project.object_dir)
+            .. " (obj)",
           path = project.object_dir,
           depth = depth + 1,
           expandable = false,
@@ -295,25 +286,13 @@ local function build_tree(data, opts)
 
     if is_expanded(runtime_id) then
       -- Group runtime sources by directory
-      local dirs = {}
-      for _, source in ipairs(runtime.sources) do
-        local dir = source.directory
-        if not dirs[dir] then
-          dirs[dir] = {}
-        end
-        table.insert(dirs[dir], source)
-      end
-
-      local dir_list = {}
-      for dir, _ in pairs(dirs) do
-        table.insert(dir_list, dir)
-      end
-      table.sort(dir_list)
+      local dirs, dir_list = group_sources_by_dir(runtime.sources)
 
       for _, dir in ipairs(dir_list) do
         local dir_id = make_node_id("directory", dir, "runtime")
         local runtime_dir = runtime.project and runtime.project.directory or ""
-        local dir_name = get_relative_path(dir, runtime_dir)
+        local dir_name =
+          require("ada_ls.utils").get_relative_path(dir, runtime_dir)
 
         table.insert(nodes, {
           id = dir_id,
@@ -864,10 +843,9 @@ if os.getenv("ADA_LS_TEST_MODE") then
   M._build_tree = build_tree
   M._filter_nodes = filter_nodes
   M._make_node_id = make_node_id
-  M._get_relative_path = get_relative_path
+  M._group_sources_by_dir = group_sources_by_dir
   M._build_tree_prefix = build_tree_prefix
   M._tree_chars = tree_chars
-  M._safe_basename = safe_basename
   M._toggle_expanded = toggle_expanded
   M._is_expanded = is_expanded
   M._get_node_icon = get_node_icon
