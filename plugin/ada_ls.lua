@@ -54,6 +54,26 @@ local als_subcmd_tbl = {
       require("ada_ls.project").pick_gpr_file()
     end,
   },
+  project_files = {
+    impl = function()
+      require("ada_ls.project_view").pick_files()
+    end,
+  },
+  project_view = {
+    impl = function()
+      require("ada_ls.project_view").toggle()
+    end,
+  },
+  project_view_options = {
+    impl = function()
+      require("ada_ls.project_view").select_options()
+    end,
+  },
+  reveal = {
+    impl = function()
+      require("ada_ls.project_view").reveal()
+    end,
+  },
 }
 
 ---@type table<string, MyCmdSubcommand>
