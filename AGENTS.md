@@ -20,15 +20,21 @@ lua/ada_ls/
   refactoring.lua      -- refactoring command handlers (parameter changes, etc.)
   utils.lua            -- notification helpers, LSP client caching, buffer utils
   health.lua           -- :checkhealth provider
+  vscode_capabilities.json -- VS Code-compatible LSP client capabilities
   spark/               -- GNATprove (SPARK) integration
     init.lua            -- prove project/file, state persistence
     config.lua          -- proof levels, option definitions, validation
     ui.lua              -- floating window option picker
   project_view/        -- Project View (ALS 2026.3+) integration
-    init.lua            -- public API, view options state
+    init.lua            -- public API, view options state, backend dispatch
     data.lua            -- fetch/parse/cache ALS project view response
     telescope.lua       -- Telescope pickers for files/projects
-    tree.lua            -- tree buffer rendering, keymaps, expand/collapse
+    tree.lua            -- builtin tree buffer rendering, keymaps
+    neo_tree/           -- neo-tree integration (optional backend)
+      init.lua          -- neo-tree source registration
+      commands.lua      -- neo-tree commands (open, refresh, etc.)
+      components.lua    -- neo-tree custom component renderers
+      items.lua         -- transform ALS data to neo-tree nodes
   snippets/            -- VS Code-compatible Ada/GPR snippets (JSON)
 plugin/ada_ls.lua      -- :Als user command with subcommands
 ftdetect/gpr.lua       -- registers .gpr filetype

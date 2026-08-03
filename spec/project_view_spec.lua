@@ -423,7 +423,8 @@ describe("ada_ls.project_view", function()
 
     it("ignores invalid option keys", function()
       project_view.set_option("invalid_key", true)
-      assert.is_false(project_view.get_option("invalid_key"))
+      -- Invalid keys return nil (not set in state)
+      assert.is_nil(project_view.get_option("invalid_key"))
     end)
   end)
 
@@ -745,6 +746,162 @@ describe("ada_ls.project_view", function()
 
       assert.is_true(project_view._state.flat_mode)
     end)
+  end)
+
+  describe("backend detection", function()
+    before_each(function()
+      -- Mock tree module for fallback
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        is_open = function()
+          return false
+        end,
+        open = stub.new(),
+        close = stub.new(),
+        toggle = stub.new(),
+        refresh = stub.new(),
+        reveal_current_file = stub.new(),
+      })
+    end)
+
+    it("uses builtin backend when backend is 'builtin'", function()
+      project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
+
+      assert.is_false(project_view.using_neo_tree())
+    end)
+
+    it(
+      "uses builtin backend when neo-tree not available (auto mode)",
+      function()
+        -- neo-tree is not loaded in tests, so auto should fall back to builtin
+        project_view = require("ada_ls.project_view")
+        project_view.setup({ backend = "auto" })
+
+        assert.is_false(project_view.using_neo_tree())
+      end
+    )
+
+    it(
+      "falls back to builtin when neo-tree requested but not available",
+      function()
+        local utils_notify = stub.new()
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = utils_notify,
+        })
+
+        project_view = require("ada_ls.project_view")
+        project_view.setup({ backend = "neo-tree" })
+
+        -- Should fall back to builtin since neo-tree isn't loaded
+        assert.is_false(project_view.using_neo_tree())
+
+        -- Verify warning was issued
+        assert.stub(utils_notify).was_called(1)
+        assert
+          .stub(utils_notify)
+          .was_called_with(
+            "neo-tree not available, falling back to builtin",
+            vim.log.levels.WARN
+          )
+      end
+    )
+
+    it("setup configures view options", function()
+      project_view = require("ada_ls.project_view")
+      project_view.setup({
+        backend = "builtin",
+        flat_mode = true,
+        show_runtime = true,
+        show_object_dirs = true,
+      })
+
+      assert.is_true(project_view.get_option("flat_mode"))
+      assert.is_true(project_view.get_option("show_runtime"))
+      assert.is_true(project_view.get_option("show_object_dirs"))
+    end)
+
+    it("open dispatches to tree when using builtin", function()
+      local open_stub = stub.new()
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        is_open = function()
+          return false
+        end,
+        open = open_stub,
+        refresh = stub.new(),
+      })
+      project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
+
+      project_view.open()
+
+      assert.stub(open_stub).was_called()
+    end)
+
+    it("close dispatches to tree when using builtin", function()
+      local close_stub = stub.new()
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        close = close_stub,
+      })
+      project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
+
+      project_view.close()
+
+      assert.stub(close_stub).was_called()
+    end)
+
+    it("toggle dispatches to tree when using builtin", function()
+      local toggle_stub = stub.new()
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        is_open = function()
+          return false
+        end,
+        toggle = toggle_stub,
+        refresh = stub.new(),
+      })
+      project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
+
+      project_view.toggle()
+
+      assert.stub(toggle_stub).was_called()
+    end)
+
+    it("is_open checks tree when using builtin", function()
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        is_open = function()
+          return true
+        end,
+      })
+      project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
+
+      assert.is_true(project_view.is_open())
+    end)
+
+    it(
+      "refresh invalidates data and refreshes tree when using builtin",
+      function()
+        local invalidate_stub = stub.new()
+        local refresh_stub = stub.new()
+        rawset(package.loaded, "ada_ls.project_view.data", {
+          invalidate = invalidate_stub,
+        })
+        rawset(package.loaded, "ada_ls.project_view.tree", {
+          is_open = function()
+            return true
+          end,
+          refresh = refresh_stub,
+        })
+        project_view = require("ada_ls.project_view")
+        project_view.setup({ backend = "builtin" })
+
+        project_view.refresh()
+
+        assert.stub(invalidate_stub).was_called()
+        assert.stub(refresh_stub).was_called()
+      end
+    )
   end)
 end)
 
