@@ -12,16 +12,17 @@ CONTENTS                                                    *ada_ls-contents*
   3. Dependencies..........................................|ada_ls-dependencies|
   4. Installation..........................................|ada_ls-installation|
   5. Quick Start...........................................|ada_ls-quickstart|
-  6. Commands..............................................|ada_ls-commands|
-  7. Configuration.........................................|ada_ls-configuration|
-  8. GPR File Support......................................|ada_ls-gpr|
-  9. Snippets..............................................|ada_ls-snippets|
-  10. Statusline Integration...............................|ada_ls-statusline|
-  11. Code Actions.........................................|ada_ls-code-actions|
-  12. Files................................................|ada_ls-files|
-  13. Troubleshooting......................................|ada_ls-troubleshooting|
-  14. Contributing.........................................|ada_ls-contributing|
-  15. License..............................................|ada_ls-license|
+  6. Suggested Keymaps.....................................|ada_ls-keymaps|
+  7. Commands..............................................|ada_ls-commands|
+  8. Configuration.........................................|ada_ls-configuration|
+  9. GPR File Support......................................|ada_ls-gpr|
+  10. Snippets..............................................|ada_ls-snippets|
+  11. Statusline Integration...............................|ada_ls-statusline|
+  12. Code Actions.........................................|ada_ls-code-actions|
+  13. Files................................................|ada_ls-files|
+  14. Troubleshooting......................................|ada_ls-troubleshooting|
+  15. Contributing.........................................|ada_ls-contributing|
+  16. License..............................................|ada_ls-license|
 
 ================================================================================
 INTRODUCTION                                          *ada_ls-introduction*
@@ -122,6 +123,38 @@ Quick start: ~
 <
 
 ================================================================================
+SUGGESTED KEYMAPS                                          *ada_ls-keymaps*
+
+The following keymaps are suggested using the <leader>a prefix for Ada
+commands and <leader>s prefix for SPARK commands: >lua
+
+    -- Ada commands
+    vim.keymap.set("n", "<leader>ab", "<cmd>Als build<cr>", { desc = "Als build" })
+    vim.keymap.set("n", "<leader>ac", "<cmd>Als clean<cr>", { desc = "Als clean" })
+    vim.keymap.set("n", "<leader>aj", "<cmd>Als config<cr>", { desc = "Als JSON config" })
+    vim.keymap.set("n", "<leader>ap", "<cmd>Als edit_gpr<cr>", { desc = "Als edit project" })
+    vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick gpr" })
+    vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als other file" })
+
+    -- Project View commands
+    vim.keymap.set("n", "<leader>av", "<cmd>Als project_view<cr>", { desc = "Als project view" })
+    vim.keymap.set("n", "<leader>af", "<cmd>Als project_files<cr>", { desc = "Als project files" })
+    vim.keymap.set("n", "<leader>ar", "<cmd>Als reveal<cr>", { desc = "Als reveal file in project view" })
+
+    -- SPARK commands
+    vim.keymap.set("n", "<leader>sp", "<cmd>Spark prove<cr>", { desc = "Spark prove project" })
+    vim.keymap.set("n", "<leader>sf", "<cmd>Spark prove_file<cr>", { desc = "Spark prove file" })
+    vim.keymap.set("n", "<leader>ss", "<cmd>Spark prove_subprogram<cr>", { desc = "Spark prove subprogram" })
+    vim.keymap.set("n", "<leader>sc", "<cmd>Spark clean<cr>", { desc = "Spark clean" })
+    vim.keymap.set("n", "<leader>so", "<cmd>Spark options<cr>", { desc = "Spark options" })
+<
+
+Mnemonic: ~
+    b = build       c = clean       j = JSON config
+    p = project     g = GPR pick    o = other file
+    v = view        f = files       r = reveal
+
+================================================================================
 COMMANDS                                                  *ada_ls-commands*
 
 :Als                                                          *:Als*
@@ -150,6 +183,19 @@ COMMANDS                                                  *ada_ls-commands*
     Open a Telescope picker to select a GPR file. If only one GPR
     file is found, it is auto-selected. Creates or updates .als.json
     with the selected file.
+
+:Als project_view                                       *:Als-project_view*
+    Toggle the project tree buffer showing all source files organized
+    by project. Uses neo-tree backend if available, otherwise falls
+    back to builtin tree buffer.
+
+:Als project_files                                     *:Als-project_files*
+    Open a Telescope picker to select a source file from the project.
+    Shows all Ada source files across all projects.
+
+:Als reveal                                                   *:Als-reveal*
+    Reveal the current file in the project tree. Opens the tree if
+    not visible and expands to show the current file's location.
 
 :Spark                                                          *:Spark*
     Main command for SPARK formal verification. Provides subcommands

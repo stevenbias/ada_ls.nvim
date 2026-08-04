@@ -6,7 +6,7 @@ Neovim plugin (Lua) providing Ada Language Server (ALS) integration. Manages
 `.gpr` project files, configures `gprbuild` as `:make`, offers a Telescope
 picker for GPR files, exposes LSP commands, and integrates GNATprove (SPARK).
 
-Requires Neovim >= 0.11. Optional deps: `nvim-notify`, `telescope.nvim`.
+Requires Neovim >= 0.11 (developed and tested on 0.12). Optional deps: `nvim-notify`, `telescope.nvim`.
 
 ## Directory Layout
 

@@ -82,7 +82,6 @@ EOF
 |---------|-------------|
 | `:Als project_view` | Toggle project tree buffer |
 | `:Als project_files` | Select source file via Telescope picker |
-| `:Als project_view_options` | Configure view options (flat mode, runtime, etc.) |
 | `:Als reveal` | Reveal current file in project tree |
 
 #### Spark commands
@@ -106,7 +105,7 @@ vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick gp
 vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als other file" })
 vim.keymap.set("n", "<leader>av", "<cmd>Als project_view<cr>", { desc = "Als project view" })
 vim.keymap.set("n", "<leader>af", "<cmd>Als project_files<cr>", { desc = "Als project files" })
-vim.keymap.set("n", "<leader>ar", "<cmd>Als reveal<cr>", { desc = "Als reveal in tree" })
+vim.keymap.set("n", "<leader>ar", "<cmd>Als reveal<cr>", { desc = "Als reveal file in project view" })
 ```
 #### Spark keymaps
 ```lua
@@ -182,12 +181,27 @@ require("lualine").setup({
 
 ```lua
 require("ada_ls").setup({
+  project_view = {
+    backend = "auto",         -- "auto" | "neo-tree" | "builtin"
+    flat_mode = false,        -- Show all projects at root level
+    show_object_dirs = false, -- Show object directory nodes
+    show_runtime = false,     -- Show runtime project sources
+  },
   spark = {
     proof_level = 0,              -- Proof level (0-4)
     options = { "multiprocessing" }, -- Enabled by default
-  }
+  },
 })
 ```
+
+### Project View Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `backend` | string | `"auto"` | Tree backend: `"auto"`, `"neo-tree"`, or `"builtin"` |
+| `flat_mode` | boolean | `false` | Show all projects at root level |
+| `show_object_dirs` | boolean | `false` | Show object directory nodes |
+| `show_runtime` | boolean | `false` | Show runtime project sources |
 
 ### SPARK Proof Levels
 
