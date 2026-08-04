@@ -64,11 +64,6 @@ local als_subcmd_tbl = {
       require("ada_ls.project_view").toggle()
     end,
   },
-  project_view_options = {
-    impl = function()
-      require("ada_ls.project_view").select_options()
-    end,
-  },
   reveal = {
     impl = function()
       require("ada_ls.project_view").reveal()

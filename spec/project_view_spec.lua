@@ -629,6 +629,65 @@ describe("ada_ls.project_view", function()
       assert.stub(open_stub).was_not_called()
       assert.stub(reveal_stub).was_called()
     end)
+
+    it("uses manager.navigate for neo-tree backend", function()
+      local navigate_stub = stub.new()
+      rawset(package.loaded, "neo-tree.sources.manager", {
+        navigate = navigate_stub,
+      })
+      -- Mock neo-tree being available
+      rawset(package.loaded, "neo-tree", {
+        config = { sources = { "ada_ls.project_view.neo_tree" } },
+      })
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        is_open = function()
+          return false
+        end,
+        open = stub.new(),
+        reveal_current_file = stub.new(),
+      })
+
+      project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "auto" })
+
+      project_view.reveal()
+
+      assert.stub(navigate_stub).was_called()
+      local call_args = navigate_stub.calls[1].vals
+      assert.equals("ada_project", call_args[1])
+      -- path_to_reveal should be the current file
+      assert.equals("/test/path/file.adb", call_args[3])
+
+      -- Cleanup neo-tree mocks
+      package.loaded["neo-tree"] = nil
+      package.loaded["neo-tree.sources.manager"] = nil
+    end)
+
+    it("returns early if no current file", function()
+      rawset(vim, "fn", {
+        expand = function()
+          return ""
+        end,
+      })
+      local navigate_stub = stub.new()
+      rawset(package.loaded, "neo-tree.sources.manager", {
+        navigate = navigate_stub,
+      })
+      rawset(package.loaded, "neo-tree", {
+        config = { sources = { "ada_ls.project_view.neo_tree" } },
+      })
+
+      project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "auto" })
+
+      project_view.reveal()
+
+      assert.stub(navigate_stub).was_not_called()
+
+      -- Cleanup neo-tree mocks
+      package.loaded["neo-tree"] = nil
+      package.loaded["neo-tree.sources.manager"] = nil
+    end)
   end)
 
   describe("set_option with tree open", function()
@@ -645,106 +704,6 @@ describe("ada_ls.project_view", function()
       project_view.set_option("flat_mode", true)
 
       assert.stub(refresh_stub).was_called()
-    end)
-  end)
-
-  describe("select_options", function()
-    local captured_keymaps
-    local buf_lines
-
-    before_each(function()
-      common.cleanup_packages()
-      captured_keymaps = {}
-      buf_lines = {}
-
-      common.setup_vim_globals({
-        nvim_create_buf = function()
-          return 42
-        end,
-        nvim_buf_set_lines = function(_, _, _, _, lines)
-          buf_lines = lines
-        end,
-        nvim_open_win = function()
-          return 99
-        end,
-        nvim_win_is_valid = function()
-          return true
-        end,
-        nvim_win_close = function() end,
-        nvim_create_autocmd = function() end,
-      })
-
-      -- Mock vim.bo for buffer options
-      vim.bo = setmetatable({}, {
-        __index = function()
-          return {}
-        end,
-        __newindex = function() end,
-      })
-
-      -- Mock vim.o for editor dimensions
-      vim.o = { columns = 120, lines = 40 }
-
-      -- Capture keymap.set calls
-      vim.keymap = {
-        set = function(mode, key, callback, opts)
-          captured_keymaps[key] =
-            { mode = mode, callback = callback, opts = opts }
-        end,
-      }
-
-      -- Mock tree module
-      rawset(package.loaded, "ada_ls.project_view.tree", {
-        is_open = function()
-          return false
-        end,
-        refresh = function() end,
-      })
-    end)
-
-    after_each(function()
-      common.cleanup_packages()
-    end)
-
-    it("creates a floating window with options", function()
-      project_view = require("ada_ls.project_view")
-
-      project_view.select_options()
-
-      -- Should have created buffer content
-      assert.is_true(#buf_lines > 0)
-      -- Should contain option labels
-      local content = table.concat(buf_lines, "\n")
-      assert.truthy(content:find("Flat Mode"))
-      assert.truthy(content:find("Object Directories"))
-      assert.truthy(content:find("Runtime Files"))
-    end)
-
-    it("sets up keymaps for toggling options", function()
-      project_view = require("ada_ls.project_view")
-
-      project_view.select_options()
-
-      -- Should have keymaps for 1, 2, 3, q, Esc
-      assert.is_not_nil(captured_keymaps["1"])
-      assert.is_not_nil(captured_keymaps["2"])
-      assert.is_not_nil(captured_keymaps["3"])
-      assert.is_not_nil(captured_keymaps["q"])
-      assert.is_not_nil(captured_keymaps["<Esc>"])
-    end)
-
-    it("toggles option when number key pressed", function()
-      project_view = require("ada_ls.project_view")
-      project_view._state.flat_mode = false
-
-      project_view.select_options()
-
-      -- Press "1" to toggle flat_mode
-      if captured_keymaps["1"] and captured_keymaps["1"].callback then
-        captured_keymaps["1"].callback()
-      end
-
-      assert.is_true(project_view._state.flat_mode)
     end)
   end)
 
@@ -784,25 +743,12 @@ describe("ada_ls.project_view", function()
     it(
       "falls back to builtin when neo-tree requested but not available",
       function()
-        local utils_notify = stub.new()
-        rawset(package.loaded, "ada_ls.utils", {
-          notify = utils_notify,
-        })
-
         project_view = require("ada_ls.project_view")
         project_view.setup({ backend = "neo-tree" })
 
         -- Should fall back to builtin since neo-tree isn't loaded
+        -- (silently, no warning)
         assert.is_false(project_view.using_neo_tree())
-
-        -- Verify warning was issued
-        assert.stub(utils_notify).was_called(1)
-        assert
-          .stub(utils_notify)
-          .was_called_with(
-            "neo-tree not available, falling back to builtin",
-            vim.log.levels.WARN
-          )
       end
     )
 

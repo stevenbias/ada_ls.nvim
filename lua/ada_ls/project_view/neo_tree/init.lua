@@ -35,7 +35,7 @@ function M.setup(config, global_config)
   M.global_config = global_config
 end
 
-function M.navigate(state, path)
+function M.navigate(state, path, path_to_reveal, callback)
   state.path = path or vim.fn.getcwd()
 
   local renderer = require("neo-tree.ui.renderer")
@@ -53,6 +53,21 @@ function M.navigate(state, path)
       return
     end
     renderer.show_nodes(items or {}, state)
+
+    -- If path_to_reveal is set, find and focus the node
+    if path_to_reveal and path_to_reveal ~= "" then
+      local node = items_mod.find_node_by_path(items or {}, path_to_reveal)
+      if node then
+        -- Schedule focus to allow tree to render first
+        vim.schedule(function()
+          renderer.focus_node(state, node.id)
+        end)
+      end
+    end
+
+    if callback then
+      callback()
+    end
   end)
 end
 

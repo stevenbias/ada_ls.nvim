@@ -790,9 +790,10 @@ function M.refresh()
   render_tree(tree_state.buf, nodes)
 end
 
---- Reveal the current file in the tree
-function M.reveal_current_file()
-  local current_file = vim.fn.expand("%:p")
+--- Reveal a file in the tree
+---@param path? string File path to reveal (defaults to current buffer)
+function M.reveal_current_file(path)
+  local current_file = path or vim.fn.expand("%:p")
   if current_file == "" then
     return
   end

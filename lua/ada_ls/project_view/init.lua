@@ -47,32 +47,12 @@ end
 local function get_backend()
   if state.backend == "builtin" then
     return "builtin"
-  elseif state.backend == "neo-tree" then
-    if neo_tree_source_registered() then
-      return "neo-tree"
-    else
-      if neo_tree_available() then
-        require("ada_ls.utils").notify(
-          "ada_project source not registered with neo-tree. "
-            .. "Add 'ada_ls.project_view.neo_tree' to your neo-tree sources config. "
-            .. "Falling back to builtin tree.",
-          vim.log.levels.WARN
-        )
-      else
-        require("ada_ls.utils").notify(
-          "neo-tree not available, falling back to builtin",
-          vim.log.levels.WARN
-        )
-      end
-      return "builtin"
-    end
-  else
-    -- auto: prefer neo-tree if source is registered
-    if neo_tree_source_registered() then
-      return "neo-tree"
-    end
-    return "builtin"
   end
+  -- For "neo-tree" or "auto", try neo-tree if available
+  if neo_tree_available() then
+    return "neo-tree"
+  end
+  return "builtin"
 end
 
 --- Check if using neo-tree backend
@@ -98,38 +78,48 @@ end
 --- Open the project view tree
 function M.open()
   if get_backend() == "neo-tree" then
-    vim.cmd("Neotree source=" .. NEO_TREE_SOURCE_NAME .. " position=left")
-  else
-    require("ada_ls.project_view.tree").open({
-      flat_mode = state.flat_mode,
-      show_object_dirs = state.show_object_dirs,
-      show_runtime = state.show_runtime,
-    })
+    local ok = pcall(
+      vim.cmd,
+      "Neotree source=" .. NEO_TREE_SOURCE_NAME .. " position=left"
+    )
+    if ok then
+      return
+    end
   end
+  require("ada_ls.project_view.tree").open({
+    flat_mode = state.flat_mode,
+    show_object_dirs = state.show_object_dirs,
+    show_runtime = state.show_runtime,
+  })
 end
 
 --- Close the project view tree
 function M.close()
   if get_backend() == "neo-tree" then
-    vim.cmd("Neotree close source=" .. NEO_TREE_SOURCE_NAME)
-  else
-    require("ada_ls.project_view.tree").close()
+    local ok = pcall(vim.cmd, "Neotree close source=" .. NEO_TREE_SOURCE_NAME)
+    if ok then
+      return
+    end
   end
+  require("ada_ls.project_view.tree").close()
 end
 
 --- Toggle the project view tree
 function M.toggle()
   if get_backend() == "neo-tree" then
-    vim.cmd(
+    local ok = pcall(
+      vim.cmd,
       "Neotree toggle source=" .. NEO_TREE_SOURCE_NAME .. " position=left"
     )
-  else
-    require("ada_ls.project_view.tree").toggle({
-      flat_mode = state.flat_mode,
-      show_object_dirs = state.show_object_dirs,
-      show_runtime = state.show_runtime,
-    })
+    if ok then
+      return
+    end
   end
+  require("ada_ls.project_view.tree").toggle({
+    flat_mode = state.flat_mode,
+    show_object_dirs = state.show_object_dirs,
+    show_runtime = state.show_runtime,
+  })
 end
 
 --- Check if tree is currently open
@@ -139,35 +129,46 @@ function M.is_open()
     -- Check if neo-tree window with our source is open
     local ok, manager = pcall(require, "neo-tree.sources.manager")
     if ok then
-      local source_state = manager.get_state(NEO_TREE_SOURCE_NAME)
-      return source_state
-        and source_state.winid
-        and vim.api.nvim_win_is_valid(source_state.winid)
+      local state_ok, source_state =
+        pcall(manager.get_state, NEO_TREE_SOURCE_NAME)
+      if state_ok and source_state then
+        return source_state.winid
+          and vim.api.nvim_win_is_valid(source_state.winid)
+      end
     end
     return false
-  else
-    return require("ada_ls.project_view.tree").is_open()
   end
+  return require("ada_ls.project_view.tree").is_open()
 end
 
 --- Reveal the current file in the project view tree
 function M.reveal()
-  if get_backend() == "neo-tree" then
-    vim.cmd(
-      "Neotree reveal source=" .. NEO_TREE_SOURCE_NAME .. " position=left"
-    )
-  else
-    local tree = require("ada_ls.project_view.tree")
-    -- First make sure tree is open
-    if not tree.is_open() then
-      tree.open({
-        flat_mode = state.flat_mode,
-        show_object_dirs = state.show_object_dirs,
-        show_runtime = state.show_runtime,
-      })
-    end
-    tree.reveal_current_file()
+  local current_file = vim.fn.expand("%:p")
+  if current_file == "" then
+    return
   end
+
+  if get_backend() == "neo-tree" then
+    local ok, manager = pcall(require, "neo-tree.sources.manager")
+    if ok then
+      -- Use manager.navigate with path_to_reveal parameter
+      local nav_ok =
+        pcall(manager.navigate, NEO_TREE_SOURCE_NAME, nil, current_file)
+      if nav_ok then
+        return
+      end
+    end
+  end
+  local tree = require("ada_ls.project_view.tree")
+  -- First make sure tree is open
+  if not tree.is_open() then
+    tree.open({
+      flat_mode = state.flat_mode,
+      show_object_dirs = state.show_object_dirs,
+      show_runtime = state.show_runtime,
+    })
+  end
+  tree.reveal_current_file(current_file)
 end
 
 --- Refresh the project view data and tree
@@ -176,13 +177,15 @@ function M.refresh()
   if get_backend() == "neo-tree" then
     local ok, manager = pcall(require, "neo-tree.sources.manager")
     if ok then
-      manager.refresh(NEO_TREE_SOURCE_NAME)
+      local refresh_ok = pcall(manager.refresh, NEO_TREE_SOURCE_NAME)
+      if refresh_ok then
+        return
+      end
     end
-  else
-    local tree = require("ada_ls.project_view.tree")
-    if tree.is_open() then
-      tree.refresh()
-    end
+  end
+  local tree = require("ada_ls.project_view.tree")
+  if tree.is_open() then
+    tree.refresh()
   end
 end
 
@@ -260,108 +263,6 @@ function M.check_neo_tree_setup()
 
   return false,
     "Add '" .. M.get_neo_tree_source() .. "' to your neo-tree sources config"
-end
-
---- Show options picker (floating window)
-function M.select_options()
-  local options = {
-    {
-      key = "flat_mode",
-      label = "Flat Mode",
-      desc = "Show all projects at root level",
-    },
-    {
-      key = "show_object_dirs",
-      label = "Object Directories",
-      desc = "Show object directory nodes",
-    },
-    {
-      key = "show_runtime",
-      label = "Runtime Files",
-      desc = "Show runtime project sources",
-    },
-  }
-
-  -- Build lines for display
-  local lines = { "Project View Options", string.rep("─", 40) }
-  for i, opt in ipairs(options) do
-    local checked = state[opt.key] and "[x]" or "[ ]"
-    table.insert(lines, string.format(" %d. %s %s", i, checked, opt.label))
-    table.insert(lines, string.format("    %s", opt.desc))
-  end
-  table.insert(lines, string.rep("─", 40))
-  table.insert(lines, " Press 1-3 to toggle, q to close")
-
-  -- Create floating window
-  local width = 44
-  local height = #lines
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modifiable = false
-  vim.bo[buf].bufhidden = "wipe"
-
-  local win_opts = {
-    relative = "editor",
-    width = width,
-    height = height,
-    col = math.floor((vim.o.columns - width) / 2),
-    row = math.floor((vim.o.lines - height) / 2),
-    style = "minimal",
-    border = "rounded",
-    title = " Options ",
-    title_pos = "center",
-  }
-
-  local win = vim.api.nvim_open_win(buf, true, win_opts)
-
-  -- Set up keymaps
-  local function close_win()
-    if vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_close(win, true)
-    end
-  end
-
-  local function toggle_option(idx)
-    local opt = options[idx]
-    if opt then
-      state[opt.key] = not state[opt.key]
-      -- Update display
-      local checked = state[opt.key] and "[x]" or "[ ]"
-      local line_idx = 2 + (idx - 1) * 2 -- Account for header lines
-      vim.bo[buf].modifiable = true
-      vim.api.nvim_buf_set_lines(
-        buf,
-        line_idx,
-        line_idx + 1,
-        false,
-        { string.format(" %d. %s %s", idx, checked, opt.label) }
-      )
-      vim.bo[buf].modifiable = false
-      -- Refresh tree if open
-      if M.is_open() then
-        M.refresh()
-      end
-    end
-  end
-
-  vim.keymap.set("n", "q", close_win, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "<Esc>", close_win, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "1", function()
-    toggle_option(1)
-  end, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "2", function()
-    toggle_option(2)
-  end, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "3", function()
-    toggle_option(3)
-  end, { buffer = buf, nowait = true })
-
-  -- Close on leaving buffer
-  vim.api.nvim_create_autocmd("BufLeave", {
-    buffer = buf,
-    once = true,
-    callback = close_win,
-  })
 end
 
 -- Export state for testing
