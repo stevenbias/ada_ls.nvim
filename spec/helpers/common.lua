@@ -217,6 +217,18 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
     end,
   })
 
+  -- Set up vim.tbl_deep_extend
+  rawset(vim, "tbl_deep_extend", function(_behavior, tbl1, tbl2)
+    local result = {}
+    for k, v in pairs(tbl1) do
+      result[k] = v
+    end
+    for k, v in pairs(tbl2) do
+      result[k] = v
+    end
+    return result
+  end)
+
   if custom_other then
     for k, v in pairs(custom_other) do
       rawset(vim, k, v)
