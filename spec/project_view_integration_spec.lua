@@ -52,6 +52,32 @@ package.preload["plenary.compat"] = function()
   return M
 end
 
+-- Pre-emptively mock telescope.utils to prevent vim.loop access during module load
+-- telescope.utils tries to access vim.loop.uv at initialization, which is not available in nlua
+-- The tests only verify data/entry preparation, not actual I/O operations
+package.preload["telescope.utils"] = function()
+  return {
+    path = {
+      normalize = function(path)
+        return path
+      end,
+      shorten = function(path)
+        return path
+      end,
+    },
+    repeated_string = function(str, count)
+      local result = ""
+      for _ = 1, count do
+        result = result .. str
+      end
+      return result
+    end,
+    make_relative = function(path)
+      return path
+    end,
+  }
+end
+
 -- Pre-emptively mock telescope.previewers to prevent vim global access during module load
 -- The tests only verify data/entry preparation, not actual preview rendering
 package.preload["telescope.previewers"] = function()

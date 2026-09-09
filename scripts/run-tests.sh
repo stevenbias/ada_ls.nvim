@@ -51,6 +51,26 @@ fi
 echo "Testing with Neovim: $NEOVIM_VERSION"
 echo ""
 
+# Detect Neovim's built-in module path for luv (early, before subshells)
+NEOVIM_CPATH=""
+NLUA_PATH=$(which nlua 2>/dev/null || echo "")
+if [ -n "$NLUA_PATH" ]; then
+  NEOVIM_CPATH=$("$NLUA_PATH" -e "local cpath = package.cpath; for p in cpath:gmatch('[^;]+') do if string.find(p, 'nvim') or string.find(p, '.deps') then io.write(p); break end end" 2>/dev/null || true)
+fi
+# Fallback: try common Neovim build paths if detection failed
+if [ -z "$NEOVIM_CPATH" ]; then
+  for common_path in "/build/nvim/parts/nvim/build/.deps/usr/lib/lua/5.1/?.so" "/usr/lib/lua/5.1/?.so"; do
+    if [ -d "${common_path%/\?\.so}" ]; then
+      NEOVIM_CPATH="$common_path"
+      break
+    fi
+  done
+fi
+if [ -n "$NEOVIM_CPATH" ]; then
+  echo "Detected Neovim module path: ${NEOVIM_CPATH}"
+fi
+echo ""
+
 # Step 1: Create isolated test environment
 echo -e "${BLUE}Step 1: Setting up isolated test environment${NC}"
 mkdir -p "${TEST_ENV_DIR}"
@@ -83,6 +103,14 @@ echo ""
 TELESCOPE_AVAILABLE=false
 NEO_TREE_AVAILABLE=false
 
+# Install Plenary as dependency of Telescope
+echo -n "Installing plenary.nvim... "
+if timeout 30 luarocks install --tree="${TEST_ENV_DIR}" plenary.nvim >/dev/null 2>&1; then
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${YELLOW}✗${NC} (non-critical)"
+fi
+
 # Install Telescope
 echo -n "Installing telescope.nvim... "
 if timeout 30 luarocks install --tree="${TEST_ENV_DIR}" telescope.nvim >/dev/null 2>&1; then
@@ -91,14 +119,6 @@ if timeout 30 luarocks install --tree="${TEST_ENV_DIR}" telescope.nvim >/dev/nul
 else
   echo -e "${YELLOW}✗${NC}"
   TELESCOPE_AVAILABLE=false
-fi
-
-# Install Plenary as dependency of Telescope
-echo -n "Installing plenary.nvim... "
-if timeout 30 luarocks install --tree="${TEST_ENV_DIR}" plenary.nvim >/dev/null 2>&1; then
-  echo -e "${GREEN}✓${NC}"
-else
-  echo -e "${YELLOW}✗${NC} (non-critical)"
 fi
 
 # Install Neo-tree
@@ -154,6 +174,7 @@ echo "Cleared: luacov.stats.out luacov.report.out"
 # Step 7: Run tests with coverage
 echo ""
 echo -e "${BLUE}Step 7: Running test suite${NC}"
+echo ""
 
 # If we have dependencies, set environment for them and run tests
 BUSTED_EXIT=0
@@ -162,7 +183,12 @@ BUSTED_OUTPUT=""
 if [ "$TELESCOPE_AVAILABLE" = true ] || [ "$NEO_TREE_AVAILABLE" = true ]; then
   export LUAROCKS_CONFIG="${TEST_ENV_DIR}/luarocks-config.lua"
   export LUA_PATH="${TEST_ENV_DIR}/share/lua/5.1/?.lua;${TEST_ENV_DIR}/share/lua/5.1/?/init.lua;;${LUA_PATH}"
-  export LUA_CPATH="${TEST_ENV_DIR}/lib/lua/5.1/?.so;/usr/local/lib/lua/5.1/?.so;${LUA_CPATH}"
+  # Add Neovim's module paths so Telescope can find luv
+  if [ -n "$NEOVIM_CPATH" ]; then
+    export LUA_CPATH="${TEST_ENV_DIR}/lib/lua/5.1/?.so;${NEOVIM_CPATH};/usr/local/lib/lua/5.1/?.so;${LUA_CPATH}"
+  else
+    export LUA_CPATH="${TEST_ENV_DIR}/lib/lua/5.1/?.so;/usr/local/lib/lua/5.1/?.so;${LUA_CPATH}"
+  fi
   
   # Validate environment variables were exported correctly
   echo "Validating Lua environment paths..."
