@@ -21,10 +21,13 @@ local function neo_tree_available()
   return ok
 end
 
+-- For testing: allows mocking neo-tree availability detection
+local neo_tree_available_fn = neo_tree_available
+
 --- Check if ada_project source is registered with neo-tree
 ---@return boolean
 local function neo_tree_source_registered()
-  if not neo_tree_available() then
+  if not neo_tree_available_fn() then
     return false
   end
 
@@ -49,7 +52,7 @@ local function get_backend()
     return "builtin"
   end
   -- For "neo-tree" or "auto", try neo-tree if available
-  if neo_tree_available() then
+  if neo_tree_available_fn() then
     return "neo-tree"
   end
   return "builtin"
@@ -265,12 +268,18 @@ function M.check_neo_tree_setup()
     "Add '" .. M.get_neo_tree_source() .. "' to your neo-tree sources config"
 end
 
--- Export state for testing
+-- Export internals for testing
 if os.getenv("ADA_LS_TEST_MODE") then
   M._state = state
   M._get_backend = get_backend
-  M._neo_tree_available = neo_tree_available
+  function M._neo_tree_available()
+    return neo_tree_available_fn()
+  end
   M._neo_tree_source_registered = neo_tree_source_registered
+  ---@param fn fun(): boolean
+  function M.set_neo_tree_available_fn(fn)
+    neo_tree_available_fn = fn
+  end
 end
 
 return M

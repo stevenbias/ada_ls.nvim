@@ -60,6 +60,9 @@ function M.create_basic_vim_api(custom_api)
     nvim_create_augroup = function()
       return 1
     end,
+    nvim_create_namespace = function()
+      return 1
+    end,
     nvim_buf_set_option = stub.new(),
     nvim_set_option_value = stub.new(),
     nvim__get_runtime = function()
@@ -93,6 +96,19 @@ function M.create_vim_fn_mock(overrides)
     end,
     isdirectory = function()
       return 0
+    end,
+    stdpath = function(what)
+      -- Return reasonable test paths for common stdpath queries
+      if what == "config" then
+        return "/home/test/.config/nvim"
+      elseif what == "data" then
+        return "/home/test/.local/share/nvim"
+      elseif what == "cache" then
+        return "/home/test/.cache/nvim"
+      elseif what == "state" then
+        return "/home/test/.local/state/nvim"
+      end
+      return "/test/nvim/" .. what
     end,
   }
 
@@ -217,6 +233,11 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
     end,
   })
 
+  -- Set up vim.hl for integration tests (required by telescope)
+  rawset(vim, "hl", {
+    highlight = stub.new(),
+  })
+
   -- Set up vim.tbl_deep_extend
   rawset(vim, "tbl_deep_extend", function(_behavior, tbl1, tbl2)
     local result = {}
@@ -227,6 +248,13 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
       result[k] = v
     end
     return result
+  end)
+
+  -- Set up vim.schedule for async operations (executes immediately in tests)
+  rawset(vim, "schedule", function(fn)
+    if type(fn) == "function" then
+      fn()
+    end
   end)
 
   if custom_other then
@@ -488,6 +516,37 @@ function M.setup_lsp_cmd_project_view_mock(response, err)
   }
   rawset(package.loaded, "ada_ls.lsp_cmd", mock)
   return mock
+end
+
+-- Optional dependency detection for Tier 2 tests
+---@return boolean
+function M.has_telescope()
+  return pcall(require, "telescope")
+end
+
+---@return boolean
+function M.has_neo_tree()
+  return pcall(require, "neo-tree")
+end
+
+--- Check if Telescope and its full environment are available for integration tests
+---@return boolean
+function M.has_telescope_full_environment()
+  local has_previewers = pcall(require, "telescope.previewers")
+  local has_pickers = pcall(require, "telescope.pickers")
+  return has_previewers and has_pickers
+end
+
+--- Check if Neo-tree and its full environment are available for integration tests
+---@return boolean
+function M.has_neo_tree_full_environment()
+  return M.has_neo_tree()
+end
+
+---@param module_name string
+---@return boolean ok, any result
+function M.require_optional(module_name)
+  return pcall(require, module_name)
 end
 
 return M

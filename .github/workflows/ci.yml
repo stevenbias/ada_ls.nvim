@@ -37,18 +37,17 @@ jobs:
           - neovim_version: 'stable'
           - neovim_version: 'nightly'
     steps:
-      - name: Prepare
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y luarocks
-          sudo luarocks install luacov
+       - name: Prepare
+         run: |
+           sudo apt-get update
+           sudo apt-get install -y luarocks lua-filesystem
+           sudo luarocks install luacov 0.16.0 busted 2.2.0
       - uses: actions/checkout@v4
-      - name: Run tests with coverage
-        uses: nvim-neorocks/nvim-busted-action@v1
+      - name: Run comprehensive tests (with optional deps)
+        run: bash scripts/run-tests.sh
         env:
           ADA_LS_TEST_MODE: "1"
-        with:
-          nvim_version: ${{ matrix.neovim_version }}
+          NEOVIM_VERSION: ${{ matrix.neovim_version }}
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -61,11 +60,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: test-matrix
     steps:
-      - name: Prepare
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y luarocks
-          sudo luarocks install luacov
+       - name: Prepare
+         run: |
+           sudo apt-get update
+           sudo apt-get install -y luarocks
+           sudo luarocks install luacov 0.16.0
       - uses: actions/checkout@v4
       - name: Download stable coverage artifact
         uses: actions/download-artifact@v4

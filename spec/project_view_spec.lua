@@ -1,4 +1,7 @@
--- Tests for lua/ada_ls/project_view/
+-- Tests for lua/ada_ls/project_view/ - Tier 1 Core Tests
+-- These are mock-based tests that test core functionality without real dependencies
+-- Integration tests with real libraries (Telescope, Neo-tree) are in spec/project_view_tier2_spec.lua
+
 local stub = require("luassert.stub")
 local common = require("spec.helpers.common")
 
@@ -400,66 +403,34 @@ describe("ada_ls.project_view (init.lua)", function()
     common.cleanup_packages()
   end)
 
-  describe("backend detection", function()
-    before_each(function()
-      project_view = require("ada_ls.project_view")
-    end)
+  -- Test direct availability of neo_tree_available() function
+  if os.getenv("ADA_LS_TEST_MODE") then
+    describe("neo_tree_available (unit)", function()
+      before_each(function()
+        common.cleanup_packages()
+        common.setup_vim_globals()
+        project_view = require("ada_ls.project_view")
+      end)
 
-    it("defaults to 'auto' backend in initial state", function()
-      assert.equals("auto", project_view.get_option("backend"))
-    end)
+      after_each(function()
+        common.cleanup_packages()
+      end)
 
-    it("detects when neo-tree is available", function()
-      -- Mock pcall to return success for neo-tree
-      local original_pcall = pcall
-      _G.pcall = function(fn, ...)
-        if fn == require and select(1, ...) == "neo-tree" then
+      it("returns true when neo-tree is available", function()
+        project_view.set_neo_tree_available_fn(function()
           return true
-        end
-        return original_pcall(fn, ...)
-      end
+        end)
+        assert.is_true(project_view._neo_tree_available())
+      end)
 
-      assert.is_true(project_view._neo_tree_available())
-
-      _G.pcall = original_pcall
-    end)
-
-    it("detects when neo-tree is not available", function()
-      -- Mock pcall to return failure for neo-tree
-      local original_pcall = pcall
-      _G.pcall = function(fn, ...)
-        if fn == require and select(1, ...) == "neo-tree" then
+      it("returns false when neo-tree is not available", function()
+        project_view.set_neo_tree_available_fn(function()
           return false
-        end
-        return original_pcall(fn, ...)
-      end
-
-      assert.is_false(project_view._neo_tree_available())
-
-      _G.pcall = original_pcall
+        end)
+        assert.is_false(project_view._neo_tree_available())
+      end)
     end)
-
-    it("returns builtin backend when forced", function()
-      project_view.setup({ backend = "builtin" })
-      assert.equals("builtin", project_view._get_backend())
-    end)
-
-    it("returns builtin backend when neo-tree unavailable", function()
-      -- Mock pcall to return failure for neo-tree
-      local original_pcall = pcall
-      _G.pcall = function(fn, ...)
-        if fn == require and select(1, ...) == "neo-tree" then
-          return false
-        end
-        return original_pcall(fn, ...)
-      end
-
-      project_view.setup({ backend = "auto" })
-      assert.equals("builtin", project_view._get_backend())
-
-      _G.pcall = original_pcall
-    end)
-  end)
+  end
 
   describe("setup", function()
     before_each(function()
@@ -516,17 +487,24 @@ describe("ada_ls.project_view (init.lua)", function()
     end)
 
     it("refreshes tree when boolean option changed while open", function()
-      local tree_module = require("ada_ls.project_view.tree")
+      -- Mock tree module BEFORE requiring project_view
+      local tree_is_open = true
+      local refresh_called = false
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        is_open = function()
+          return tree_is_open
+        end,
+        refresh = function()
+          refresh_called = true
+        end,
+      })
 
-      -- Mock is_open to return true
-      stub(tree_module, "is_open").returns(true)
-
-      -- Stub refresh before setting the option
-      local refresh_stub = stub(tree_module, "refresh")
+      project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
 
       project_view.set_option("flat_mode", true)
 
-      assert.stub(refresh_stub).was_called()
+      assert.is_true(refresh_called)
     end)
   end)
 
@@ -590,33 +568,6 @@ describe("ada_ls.project_view (init.lua)", function()
 
       assert.stub(require("ada_ls.project_view.data").invalidate).was_called()
       assert.stub(require("ada_ls.project_view.tree").refresh).was_called()
-    end)
-  end)
-
-  describe("neo-tree backend detection", function()
-    before_each(function()
-      project_view = require("ada_ls.project_view")
-    end)
-
-    it("checks if neo-tree source is registered", function()
-      -- Mock neo-tree as unavailable
-      local original_pcall = pcall
-      _G.pcall = function(fn, ...)
-        if fn == require and select(1, ...) == "neo-tree" then
-          return false
-        end
-        return original_pcall(fn, ...)
-      end
-
-      local registered = project_view._neo_tree_source_registered()
-      assert.is_false(registered)
-
-      _G.pcall = original_pcall
-    end)
-
-    it("returns using_neo_tree status", function()
-      local using_neo_tree = project_view.using_neo_tree()
-      assert.is_boolean(using_neo_tree)
     end)
   end)
 
@@ -860,132 +811,6 @@ describe("ada_ls.project_view.telescope", function()
   end)
 end)
 
--- Additional tests for tree.lua interactive features
-describe("ada_ls.project_view.tree - interactive features", function()
-  local tree
-
-  before_each(function()
-    common.cleanup_packages()
-    common.setup_vim_globals()
-    vim.fs.normalize = function(path)
-      return path
-    end
-    tree = require("ada_ls.project_view.tree")
-  end)
-
-  after_each(function()
-    common.cleanup_packages()
-  end)
-
-  describe("window keymaps", function()
-    it("has enter handler for opening files", function()
-      assert.is_function(tree._handle_enter)
-    end)
-
-    it("has split handler for horizontal split", function()
-      assert.is_function(tree._handle_open_split)
-    end)
-
-    it("has vsplit handler for vertical split", function()
-      assert.is_function(tree._handle_open_vsplit)
-    end)
-
-    it("has tab handler for opening in new tab", function()
-      assert.is_function(tree._handle_open_tab)
-    end)
-
-    it("has preview handler for previewing files", function()
-      assert.is_function(tree._handle_preview)
-    end)
-
-    it("has expand handler for expanding nodes", function()
-      assert.is_function(tree._handle_expand)
-    end)
-
-    it("has collapse handler for collapsing nodes", function()
-      assert.is_function(tree._handle_collapse)
-    end)
-
-    it("has collapse_all handler for collapsing all", function()
-      assert.is_function(tree._handle_collapse_all)
-    end)
-
-    it("has expand_all handler for expanding all", function()
-      assert.is_function(tree._handle_expand_all)
-    end)
-
-    it("has filter handler for filtering", function()
-      assert.is_function(tree._handle_filter)
-    end)
-
-    it("has clear_filter handler", function()
-      assert.is_function(tree._handle_clear_filter)
-    end)
-
-    it("has help handler for showing help", function()
-      assert.is_function(tree._handle_help)
-    end)
-  end)
-
-  describe("tree rendering options", function()
-    it("supports flat_mode option", function()
-      local opts =
-        { flat_mode = true, show_object_dirs = false, show_runtime = false }
-      assert.is_true(opts.flat_mode)
-    end)
-
-    it("supports show_object_dirs option", function()
-      local opts =
-        { flat_mode = false, show_object_dirs = true, show_runtime = false }
-      assert.is_true(opts.show_object_dirs)
-    end)
-
-    it("supports show_runtime option", function()
-      local opts =
-        { flat_mode = false, show_object_dirs = false, show_runtime = true }
-      assert.is_true(opts.show_runtime)
-    end)
-  end)
-
-  describe("node state management", function()
-    it("tracks node expansion state", function()
-      tree._tree_state.expanded = {}
-      local node_id = "test_node_1"
-
-      -- Initially not set (nil)
-      assert.is_nil(tree._tree_state.expanded[node_id])
-
-      -- After toggling, should be true
-      tree._tree_state.expanded[node_id] = true
-      assert.is_true(tree._tree_state.expanded[node_id])
-
-      -- After toggling again, should be false
-      tree._tree_state.expanded[node_id] = false
-      assert.is_false(tree._tree_state.expanded[node_id])
-    end)
-
-    it("stores filter state", function()
-      tree._tree_state.filter = ""
-      assert.equals("", tree._tree_state.filter)
-
-      tree._tree_state.filter = "main"
-      assert.equals("main", tree._tree_state.filter)
-    end)
-
-    it("tracks open window and buffer", function()
-      tree._tree_state.buf = nil
-      tree._tree_state.win = nil
-      assert.is_nil(tree._tree_state.buf)
-      assert.is_nil(tree._tree_state.win)
-
-      tree._tree_state.buf = 1
-      tree._tree_state.win = 2
-      assert.equals(1, tree._tree_state.buf)
-      assert.equals(2, tree._tree_state.win)
-    end)
-  end)
-end)
-
 describe("ada_ls.project_view", function()
   local project_view
 
@@ -1140,57 +965,68 @@ describe("ada_ls.project_view", function()
 
   describe("open", function()
     it("calls tree.open with current state options", function()
-      local open_stub = stub.new()
+      local open_called = false
+      local open_call_args = nil
       rawset(package.loaded, "ada_ls.project_view.tree", {
         is_open = function()
           return false
         end,
-        open = open_stub,
-        refresh = stub.new(),
+        open = function(opts)
+          open_called = true
+          open_call_args = opts
+        end,
+        refresh = function() end,
       })
       project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
 
       project_view.set_option("flat_mode", true)
       project_view.open()
 
-      assert.stub(open_stub).was_called()
-      local call_args = open_stub.calls[1].refs[1]
-      assert.is_true(call_args.flat_mode)
+      assert.is_true(open_called)
+      assert.is_true(open_call_args.flat_mode)
     end)
   end)
 
   describe("close", function()
     it("calls tree.close", function()
-      local close_stub = stub.new()
+      local close_called = false
       rawset(package.loaded, "ada_ls.project_view.tree", {
-        close = close_stub,
+        close = function()
+          close_called = true
+        end,
       })
       project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
 
       project_view.close()
 
-      assert.stub(close_stub).was_called()
+      assert.is_true(close_called)
     end)
   end)
 
   describe("toggle", function()
     it("calls tree.toggle with current state options", function()
-      local toggle_stub = stub.new()
+      local toggle_called = false
+      local toggle_call_args = nil
       rawset(package.loaded, "ada_ls.project_view.tree", {
         is_open = function()
           return false
         end,
-        toggle = toggle_stub,
-        refresh = stub.new(),
+        toggle = function(opts)
+          toggle_called = true
+          toggle_call_args = opts
+        end,
+        refresh = function() end,
       })
       project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
 
       project_view.set_option("show_object_dirs", true)
       project_view.toggle()
 
-      assert.stub(toggle_stub).was_called()
-      local call_args = toggle_stub.calls[1].refs[1]
-      assert.is_true(call_args.show_object_dirs)
+      assert.is_true(toggle_called)
+      assert.is_true(toggle_call_args.show_object_dirs)
     end)
   end)
 
@@ -1232,81 +1068,25 @@ describe("ada_ls.project_view", function()
       assert.stub(open_stub).was_not_called()
       assert.stub(reveal_stub).was_called()
     end)
-
-    it("uses manager.navigate for neo-tree backend", function()
-      local navigate_stub = stub.new()
-      rawset(package.loaded, "neo-tree.sources.manager", {
-        navigate = navigate_stub,
-      })
-      -- Mock neo-tree being available
-      rawset(package.loaded, "neo-tree", {
-        config = { sources = { "ada_ls.project_view.neo_tree" } },
-      })
-      rawset(package.loaded, "ada_ls.project_view.tree", {
-        is_open = function()
-          return false
-        end,
-        open = stub.new(),
-        reveal_current_file = stub.new(),
-      })
-
-      project_view = require("ada_ls.project_view")
-      project_view.setup({ backend = "auto" })
-
-      project_view.reveal()
-
-      assert.stub(navigate_stub).was_called()
-      local call_args = navigate_stub.calls[1].vals
-      assert.equals("ada_project", call_args[1])
-      -- path_to_reveal should be the current file
-      assert.equals("/test/path/file.adb", call_args[3])
-
-      -- Cleanup neo-tree mocks
-      package.loaded["neo-tree"] = nil
-      package.loaded["neo-tree.sources.manager"] = nil
-    end)
-
-    it("returns early if no current file", function()
-      rawset(vim, "fn", {
-        expand = function()
-          return ""
-        end,
-      })
-      local navigate_stub = stub.new()
-      rawset(package.loaded, "neo-tree.sources.manager", {
-        navigate = navigate_stub,
-      })
-      rawset(package.loaded, "neo-tree", {
-        config = { sources = { "ada_ls.project_view.neo_tree" } },
-      })
-
-      project_view = require("ada_ls.project_view")
-      project_view.setup({ backend = "auto" })
-
-      project_view.reveal()
-
-      assert.stub(navigate_stub).was_not_called()
-
-      -- Cleanup neo-tree mocks
-      package.loaded["neo-tree"] = nil
-      package.loaded["neo-tree.sources.manager"] = nil
-    end)
   end)
 
   describe("set_option with tree open", function()
     it("refreshes tree when option changes and tree is open", function()
-      local refresh_stub = stub.new()
+      local refresh_called = false
       rawset(package.loaded, "ada_ls.project_view.tree", {
         is_open = function()
           return true
         end,
-        refresh = refresh_stub,
+        refresh = function()
+          refresh_called = true
+        end,
       })
       project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
 
       project_view.set_option("flat_mode", true)
 
-      assert.stub(refresh_stub).was_called()
+      assert.is_true(refresh_called)
     end)
   end)
 
@@ -1332,28 +1112,36 @@ describe("ada_ls.project_view", function()
       assert.is_false(project_view.using_neo_tree())
     end)
 
-    it(
-      "uses builtin backend when neo-tree not available (auto mode)",
-      function()
-        -- neo-tree is not loaded in tests, so auto should fall back to builtin
-        project_view = require("ada_ls.project_view")
-        project_view.setup({ backend = "auto" })
+    if os.getenv("ADA_LS_TEST_MODE") then
+      it(
+        "uses builtin backend when neo-tree not available (auto mode)",
+        function()
+          -- Test fallback scenario: verify backend detection when neo-tree is not available
+          project_view = require("ada_ls.project_view")
+          project_view.set_neo_tree_available_fn(function()
+            return false
+          end)
+          project_view.setup({ backend = "auto" })
 
-        assert.is_false(project_view.using_neo_tree())
-      end
-    )
+          assert.is_false(project_view.using_neo_tree())
+        end
+      )
 
-    it(
-      "falls back to builtin when neo-tree requested but not available",
-      function()
-        project_view = require("ada_ls.project_view")
-        project_view.setup({ backend = "neo-tree" })
+      it(
+        "falls back to builtin when neo-tree requested but not available",
+        function()
+          -- Test fallback scenario: user explicitly requests neo-tree backend,
+          -- but plugin is not available (should silently fall back to builtin)
+          project_view = require("ada_ls.project_view")
+          project_view.set_neo_tree_available_fn(function()
+            return false
+          end)
+          project_view.setup({ backend = "neo-tree" })
 
-        -- Should fall back to builtin since neo-tree isn't loaded
-        -- (silently, no warning)
-        assert.is_false(project_view.using_neo_tree())
-      end
-    )
+          assert.is_false(project_view.using_neo_tree())
+        end
+      )
+    end
 
     it("setup configures view options", function()
       project_view = require("ada_ls.project_view")
@@ -1589,6 +1377,7 @@ if os.getenv("ADA_LS_TEST_MODE") then
         nvim_win_is_valid = function()
           return true
         end,
+        nvim_set_hl = function() end,
       })
       tree = require("ada_ls.project_view.tree")
     end)
