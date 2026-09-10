@@ -5,7 +5,7 @@
 [![Neovim](https://img.shields.io/badge/Neovim-0.12+-green.svg)](https://neovim.io)
 
 Neovim plugin providing out-of-the-box Ada Language Server integration: GPR
-project management, build commands, GPR file support, VS Code-compatible
+project management, project view, build commands, GPR file support, VS Code-compatible
 snippets and SPARK formal verification.
 
 ## Features
@@ -13,6 +13,8 @@ snippets and SPARK formal verification.
 - Out-of-the-box ALS configuration (no nvim-lspconfig needed)
 - GPR project file support (LSP, Treesitter highlighting, Telescope picker)
 - gprbuild integration via `:make`
+- Project view with optional [neo-tree](https://github.com/nvim-neo-tree/neo-tree.nvim) integration
+- Research on project source files via Telescope picker
 - SPARK formal verification with gnatprove
 - Jump between `.ads` and `.adb` files
 - VS Code-equivalent LSP capabilities
@@ -36,6 +38,7 @@ snippets and SPARK formal verification.
   ft = { "ada", "gpr" },
   dependencies = {
     "nvim-telescope/telescope.nvim",  -- optional, for GPR file picker
+    "nvim-neo-tree/neo-tree.nvim",    -- optional, for project view integration with neo-tree
     "rcarriga/nvim-notify",           -- optional, for notifications
     "L3MON4D3/LuaSnip",               -- optional, for snippets
   },
@@ -47,6 +50,7 @@ snippets and SPARK formal verification.
 
 ```vim
 Plug 'nvim-telescope/telescope.nvim'  " optional
+Plug 'nvim-neo-tree/neo-tree.nvim'    " optional
 Plug 'rcarriga/nvim-notify'           " optional
 Plug 'L3MON4D3/LuaSnip'               " optional
 Plug 'stevenbias/ada_ls.nvim'
@@ -80,9 +84,8 @@ EOF
 #### Project View commands (ALS 2026.3+)
 | Command | Description |
 |---------|-------------|
-| `:Als project_view` | Toggle project tree buffer |
+| `:Als project_view` | Toggle project tree buffer and reveal current file when opening |
 | `:Als project_files` | Select source file via Telescope picker |
-| `:Als reveal` | Reveal current file in project tree |
 
 #### Spark commands
 | Command | Description |
@@ -97,15 +100,14 @@ EOF
 
 #### Ada keymaps
 ```lua
-vim.keymap.set("n", "<leader>ab", "<cmd>Als build<cr>", { desc = "Als build" })
-vim.keymap.set("n", "<leader>ac", "<cmd>Als clean<cr>", { desc = "Als clean" })
+vim.keymap.set("n", "<leader>ab", "<cmd>Als build<cr>", { desc = "Als Build" })
+vim.keymap.set("n", "<leader>ac", "<cmd>Als clean<cr>", { desc = "Als Clean" })
 vim.keymap.set("n", "<leader>aj", "<cmd>Als config<cr>", { desc = "Als JSON config" })
-vim.keymap.set("n", "<leader>ap", "<cmd>Als edit_gpr<cr>", { desc = "Als edit project file" })
-vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick gpr" })
-vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als other file" })
-vim.keymap.set("n", "<leader>av", "<cmd>Als project_view<cr>", { desc = "Als project view" })
-vim.keymap.set("n", "<leader>af", "<cmd>Als project_files<cr>", { desc = "Als project files" })
-vim.keymap.set("n", "<leader>ar", "<cmd>Als reveal<cr>", { desc = "Als reveal file in project view" })
+vim.keymap.set("n", "<leader>ap", "<cmd>Als edit_gpr<cr>", { desc = "Als edit Project file" })
+vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick Gpr" })
+vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als Other file" })
+vim.keymap.set("n", "<leader>av", "<cmd>Als project_view<cr>", { desc = "Als project View" })
+vim.keymap.set("n", "<leader>af", "<cmd>Als project_files<cr>", { desc = "Als project Files" })
 ```
 #### Spark keymaps
 ```lua
