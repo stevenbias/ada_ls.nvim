@@ -360,6 +360,33 @@ Choose the right command for your task (don't skip steps):
 
 ### Code Quality & Linting
 
+**MANDATORY: Always check format and lint after every change.** Do not skip this step.
+
+```bash
+# After modifying any Lua files, run these commands BEFORE testing:
+stylua lua/ plugin/ after/ spec/   # auto-format all files
+luacheck lua/ plugin/ after/ spec/  # verify zero warnings
+```
+
+**Why this matters:**
+- StyLua is auto-run by pre-commit hooks; if you skip formatting, commit will fail
+- Luacheck catches real bugs (unused variables, typos, logic errors)
+- Format/lint failures block CI pipeline
+- Running locally catches issues before commit, saving time
+
+**Workflow (every time):**
+1. Make code changes
+2. Run `stylua` to auto-format
+3. Run `luacheck` and fix any warnings
+4. Run tests
+5. Only then commit
+
+**Example: If you add a new variable, luacheck will error if it's unused:**
+```lua
+local unused_var = 42  -- ❌ luacheck error: assigned but never used
+```
+Either use it or remove it. No exceptions.
+
 - **Luacheck warnings**: ALL code (production and test) must have zero Luacheck warnings.
   In tests with intentionally unused function parameters (mock definitions matching real
   signatures), use the underscore prefix convention: `function(_name, _opts)`. All declared
