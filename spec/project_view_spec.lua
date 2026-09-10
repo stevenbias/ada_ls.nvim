@@ -1578,7 +1578,51 @@ if os.getenv("ADA_LS_TEST_MODE") then
         assert.is_not_nil(obj_node)
         assert.equals("obj (obj)", obj_node.name)
         assert.equals("/project/obj", obj_node.path)
-        assert.is_false(obj_node.expandable)
+        assert.is_true(obj_node.expandable)
+      end)
+
+      it("shows direct object directory files when expanded", function()
+        local temp_root = os.tmpname()
+        os.remove(temp_root)
+        local obj_dir = vim.fs.joinpath(temp_root, "obj")
+        assert.equals(1, vim.fn.mkdir(obj_dir, "p"))
+        local ali_file = vim.fs.joinpath(obj_dir, "main.ali")
+        local adb_file = vim.fs.joinpath(obj_dir, "main.adt")
+        local file = io.open(ali_file, "w")
+        assert.is_not_nil(file)
+        file:write("")
+        file:close()
+        file = io.open(adb_file, "w")
+        assert.is_not_nil(file)
+        file:write("")
+        file:close()
+
+        local data = create_test_data()
+        data.projects["proj_1"].project.object_dir = obj_dir
+        tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+        tree._tree_state.expanded[tree._make_node_id(
+          "object_dir",
+          obj_dir,
+          "proj_1"
+        )] =
+          true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = true,
+          show_runtime = false,
+        })
+
+        assert.equals("object_dir", nodes[3].type)
+        assert.equals("file", nodes[4].type)
+        assert.equals("main.adt", nodes[4].name)
+        assert.equals("file", nodes[5].type)
+        assert.equals("main.ali", nodes[5].name)
+
+        os.remove(ali_file)
+        os.remove(adb_file)
+        os.remove(obj_dir)
+        os.remove(temp_root)
       end)
 
       it("shows all projects at root in flat mode", function()
@@ -2512,6 +2556,31 @@ if os.getenv("ADA_LS_TEST_MODE") then
 
           tree._handle_enter()
 
+          assert.is_false(refresh_called)
+        end)
+
+        it("does not open object directory nodes", function()
+          local cmd_calls = {}
+          vim.cmd = setmetatable({}, {
+            __index = function(_, key)
+              return function(arg)
+                table.insert(cmd_calls, { cmd = key, arg = arg })
+              end
+            end,
+          })
+
+          tree._tree_state.nodes = {
+            {
+              id = "obj_1",
+              type = "object_dir",
+              path = "/project/obj",
+              expandable = false,
+            },
+          }
+
+          tree._handle_enter()
+
+          assert.equals(0, #cmd_calls)
           assert.is_false(refresh_called)
         end)
       end)

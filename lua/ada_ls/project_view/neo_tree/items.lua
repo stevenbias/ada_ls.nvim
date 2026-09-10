@@ -80,18 +80,59 @@ local function create_directory_node(dir_path, sources, project)
   }
 end
 
+--- Get direct file entries from a directory, sorted alphabetically.
+---@param dir_path string
+---@return string[]
+local function get_directory_files(dir_path)
+  local fs_dir = vim.fs.dir
+  if type(fs_dir) ~= "function" then
+    return {}
+  end
+
+  local files = {}
+  local ok, iter = pcall(fs_dir, dir_path)
+  if not ok or type(iter) ~= "function" then
+    return files
+  end
+
+  for name, entry_type in iter do
+    if entry_type == "file" then
+      table.insert(files, name)
+    end
+  end
+
+  table.sort(files)
+  return files
+end
+
 --- Create an object directory node
 ---@param object_dir string Object directory path
 ---@param project table Project info
 ---@return table Neo-tree node
 local function create_object_dir_node(object_dir, project)
   local utils = require("ada_ls.utils")
+  local children = {}
+
+  for _, file_name in ipairs(get_directory_files(object_dir)) do
+    table.insert(children, {
+      id = make_id("file", vim.fs.joinpath(object_dir, file_name), project.id),
+      name = file_name,
+      type = "file",
+      path = vim.fs.joinpath(object_dir, file_name),
+      ext = file_name:match("%.([^%.]+)$") or "",
+      extra = {
+        project_id = project.id,
+        project_name = project.name,
+      },
+    })
+  end
+
   return {
     id = make_id("object_dir", object_dir, project.id),
     name = utils.safe_basename(object_dir) .. " (obj)",
     type = "directory",
     path = object_dir,
-    -- No children - object directory is a leaf
+    children = children,
     extra = {
       project_id = project.id,
       project_name = project.name,
@@ -321,6 +362,8 @@ if os.getenv("ADA_LS_TEST_MODE") then
   M._group_by_directory = group_by_directory
   M._create_file_node = create_file_node
   M._create_directory_node = create_directory_node
+  M._get_directory_files = get_directory_files
+  M._create_object_dir_node = create_object_dir_node
   M._create_project_node = create_project_node
   M._create_runtime_node = create_runtime_node
 end

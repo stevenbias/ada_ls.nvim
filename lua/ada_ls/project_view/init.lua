@@ -14,6 +14,15 @@ local NEO_TREE_SOURCE = "ada_ls.project_view.neo_tree"
 -- Neo-tree source name (for Neotree commands and manager calls)
 local NEO_TREE_SOURCE_NAME = "ada_project"
 
+---@return { flat_mode: boolean, show_object_dirs: boolean, show_runtime: boolean }
+local function get_view_options()
+  return {
+    flat_mode = state.flat_mode,
+    show_object_dirs = state.show_object_dirs,
+    show_runtime = state.show_runtime,
+  }
+end
+
 --- Check if neo-tree is available (installed and loaded)
 ---@return boolean
 local function neo_tree_available()
@@ -81,6 +90,9 @@ end
 --- Open the project view tree
 function M.open()
   if get_backend() == "neo-tree" then
+    require("ada_ls.project_view.neo_tree").set_project_view_opts(
+      get_view_options()
+    )
     local ok = pcall(
       vim.cmd,
       "Neotree source=" .. NEO_TREE_SOURCE_NAME .. " position=left"
@@ -110,6 +122,9 @@ end
 --- Toggle the project view tree
 function M.toggle()
   if get_backend() == "neo-tree" then
+    require("ada_ls.project_view.neo_tree").set_project_view_opts(
+      get_view_options()
+    )
     local ok = pcall(
       vim.cmd,
       "Neotree toggle source=" .. NEO_TREE_SOURCE_NAME .. " position=left"
@@ -152,6 +167,9 @@ function M.reveal()
   end
 
   if get_backend() == "neo-tree" then
+    require("ada_ls.project_view.neo_tree").set_project_view_opts(
+      get_view_options()
+    )
     local ok, manager = pcall(require, "neo-tree.sources.manager")
     if ok then
       -- Use manager.navigate with path_to_reveal parameter
@@ -178,6 +196,9 @@ end
 function M.refresh()
   require("ada_ls.project_view.data").invalidate()
   if get_backend() == "neo-tree" then
+    require("ada_ls.project_view.neo_tree").set_project_view_opts(
+      get_view_options()
+    )
     local ok, manager = pcall(require, "neo-tree.sources.manager")
     if ok then
       local refresh_ok = pcall(manager.refresh, NEO_TREE_SOURCE_NAME)
@@ -240,6 +261,11 @@ function M.setup(opts)
   if opts.show_runtime ~= nil then
     state.show_runtime = opts.show_runtime
   end
+
+  local ok, neo_tree_source = pcall(require, "ada_ls.project_view.neo_tree")
+  if ok then
+    neo_tree_source.set_project_view_opts(get_view_options())
+  end
 end
 
 --- Get the neo-tree source module path
@@ -272,6 +298,7 @@ end
 if os.getenv("ADA_LS_TEST_MODE") then
   M._state = state
   M._get_backend = get_backend
+  M._get_view_options = get_view_options
   function M._neo_tree_available()
     return neo_tree_available_fn()
   end

@@ -104,6 +104,35 @@ describe("ada_ls.project_view.neo_tree", function()
       assert.stub(mock_renderer.focus_node).was_not_called()
     end)
 
+    it("prefers project-view options when provided", function()
+      local state = {}
+      local captured_opts
+
+      mock_items.get_items = function(opts, callback)
+        captured_opts = opts
+        callback({})
+      end
+
+      source.setup({
+        show_runtime = false,
+        show_object_dirs = false,
+        flat_mode = false,
+      }, {})
+      source.set_project_view_opts({
+        show_runtime = true,
+        show_object_dirs = true,
+        flat_mode = true,
+      })
+
+      source.navigate(state, "/explicit/path", nil, nil)
+
+      assert.same({
+        show_runtime = true,
+        show_object_dirs = true,
+        flat_mode = true,
+      }, captured_opts)
+    end)
+
     it("falls back to cwd and default options before setup", function()
       local state = {}
       local captured_opts
@@ -120,6 +149,31 @@ describe("ada_ls.project_view.neo_tree", function()
         show_runtime = false,
         show_object_dirs = false,
         flat_mode = false,
+      }, captured_opts)
+    end)
+
+    it("uses source config when project-view options are not set", function()
+      local state = {}
+      local captured_opts
+
+      source.set_project_view_opts(nil)
+      source.setup({
+        show_runtime = true,
+        show_object_dirs = true,
+        flat_mode = true,
+      }, {})
+
+      mock_items.get_items = function(opts, callback)
+        captured_opts = opts
+        callback({})
+      end
+
+      source.navigate(state, "/explicit/path", nil, nil)
+
+      assert.same({
+        show_runtime = true,
+        show_object_dirs = true,
+        flat_mode = true,
       }, captured_opts)
     end)
 

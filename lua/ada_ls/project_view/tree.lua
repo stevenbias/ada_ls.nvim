@@ -123,6 +123,31 @@ local function group_sources_by_dir(sources)
   return dirs, sorted_dirs
 end
 
+--- Get direct file entries from a directory, sorted alphabetically.
+---@param dir_path string
+---@return string[]
+local function get_directory_files(dir_path)
+  local fs_dir = vim.fs.dir
+  if type(fs_dir) ~= "function" then
+    return {}
+  end
+
+  local files = {}
+  local ok, iter = pcall(fs_dir, dir_path)
+  if not ok or type(iter) ~= "function" then
+    return files
+  end
+
+  for name, entry_type in iter do
+    if entry_type == "file" then
+      table.insert(files, name)
+    end
+  end
+
+  table.sort(files)
+  return files
+end
+
 --- Build tree nodes from project data
 ---@param data table ProjectViewData
 ---@param opts { flat_mode: boolean, show_object_dirs: boolean, show_runtime: boolean }
@@ -204,9 +229,24 @@ local function build_tree(data, opts)
             .. " (obj)",
           path = project.object_dir,
           depth = depth + 1,
-          expandable = false,
+          expandable = true,
           project_id = project.id,
         })
+
+        if is_expanded(obj_id) then
+          for _, file_name in ipairs(get_directory_files(project.object_dir)) do
+            local file_path = vim.fs.joinpath(project.object_dir, file_name)
+            table.insert(nodes, {
+              id = make_node_id("file", file_path, project.id),
+              type = "file",
+              name = file_name,
+              path = file_path,
+              depth = depth + 2,
+              expandable = false,
+              project_id = project.id,
+            })
+          end
+        end
       end
 
       -- Add sub-projects if not in flat mode
@@ -529,7 +569,7 @@ local function handle_enter()
   if node.expandable then
     toggle_expanded(node.id)
     M.refresh()
-  elseif node.path then
+  elseif node.type == "file" and node.path then
     open_file(node.path)
   end
 end
@@ -845,6 +885,7 @@ if os.getenv("ADA_LS_TEST_MODE") then
   M._filter_nodes = filter_nodes
   M._make_node_id = make_node_id
   M._group_sources_by_dir = group_sources_by_dir
+  M._get_directory_files = get_directory_files
   M._build_tree_prefix = build_tree_prefix
   M._tree_chars = tree_chars
   M._toggle_expanded = toggle_expanded

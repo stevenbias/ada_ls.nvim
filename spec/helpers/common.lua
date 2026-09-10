@@ -3,6 +3,21 @@ local stub = require("luassert.stub")
 
 local M = {}
 
+local function shell_escape(path)
+  return '"' .. tostring(path):gsub('"', '\\"') .. '"'
+end
+
+local function is_directory_path(path)
+  local result = os.execute("test -d " .. shell_escape(path))
+  if type(result) == "number" then
+    return result == 0
+  end
+  if type(result) == "boolean" then
+    return result
+  end
+  return false
+end
+
 -- Package cleanup (reset module state between tests)
 function M.cleanup_packages()
   -- Clear preloads first
@@ -94,8 +109,8 @@ function M.create_vim_fn_mock(overrides)
     filereadable = function()
       return 1
     end,
-    isdirectory = function()
-      return 0
+    isdirectory = function(path)
+      return is_directory_path(path) and 1 or 0
     end,
     stdpath = function(what)
       -- Return reasonable test paths for common stdpath queries
@@ -109,6 +124,10 @@ function M.create_vim_fn_mock(overrides)
         return "/home/test/.local/state/nvim"
       end
       return "/test/nvim/" .. what
+    end,
+    mkdir = function(path, _flags)
+      local ok = os.execute('mkdir -p "' .. path .. '"')
+      return ok and 1 or 0
     end,
   }
 
@@ -136,7 +155,8 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
   rawset(vim, "api", M.create_basic_vim_api(custom_api))
 
   -- Set up vim.fn
-  rawset(vim, "fn", M.create_vim_fn_mock(custom_fn))
+  local vim_fn = M.create_vim_fn_mock(custom_fn)
+  rawset(vim, "fn", vim_fn)
 
   -- Set up other vim globals using rawset
   rawset(vim, "log", {
@@ -203,6 +223,38 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
     find = stub.new().returns({}),
     joinpath = function(...)
       return table.concat({ ... }, "/")
+    end,
+    dir = function(path)
+      local p = io.popen(
+        "ls -A1 --group-directories-first "
+          .. shell_escape(path)
+          .. " 2>/dev/null"
+      )
+      if not p then
+        return function()
+          return nil
+        end
+      end
+
+      local entries = {}
+      for name in p:lines() do
+        local full_path = path .. "/" .. name
+        table.insert(entries, {
+          name = name,
+          type = vim_fn.isdirectory(full_path) == 1 and "directory" or "file",
+        })
+      end
+      p:close()
+
+      local index = 0
+      return function()
+        index = index + 1
+        local entry = entries[index]
+        if not entry then
+          return nil
+        end
+        return entry.name, entry.type
+      end
     end,
   })
 

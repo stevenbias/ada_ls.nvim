@@ -18,6 +18,15 @@ describe("ada_ls.project_view.neo_tree.items", function()
   end)
 
   describe("get_items", function()
+    local object_dir_cleanup = nil
+
+    after_each(function()
+      if object_dir_cleanup then
+        object_dir_cleanup()
+        object_dir_cleanup = nil
+      end
+    end)
+
     it("returns error when ALS not supported", function()
       common.setup_lsp_cmd_project_view_mock(nil, "Unknown command")
       items = require("ada_ls.project_view.neo_tree.items")
@@ -204,6 +213,46 @@ describe("ada_ls.project_view.neo_tree.items", function()
       assert.equals("lib_project", subproject_node.name)
       assert.is_false(subproject_node.extra.is_root)
     end)
+
+    it(
+      "adds object directory with direct file children when enabled",
+      function()
+        local temp_root = os.tmpname()
+        os.remove(temp_root)
+        local obj_dir = vim.fs.joinpath(temp_root, "obj")
+        assert.equals(true, vim.fn.mkdir(obj_dir, "p") == 1)
+        local obj_file = vim.fs.joinpath(obj_dir, "main.ali")
+        local file = io.open(obj_file, "w")
+        assert.is_not_nil(file)
+        file:write("")
+        file:close()
+
+        object_dir_cleanup = function()
+          os.remove(obj_file)
+          os.remove(obj_dir)
+          os.remove(temp_root)
+        end
+
+        local response = common.create_project_view_response()
+        response.projects[1].project["object-directory"] = obj_dir
+        common.setup_lsp_cmd_project_view_mock(response)
+        items = require("ada_ls.project_view.neo_tree.items")
+
+        local result_items
+        items.get_items({ show_object_dirs = true }, function(i)
+          result_items = i
+        end)
+
+        local project_node = result_items[1]
+        local obj_node = project_node.children[2]
+        assert.equals("directory", obj_node.type)
+        assert.equals("obj (obj)", obj_node.name)
+        assert.is_true(obj_node.extra.is_object_dir)
+        assert.equals(1, #obj_node.children)
+        assert.equals("file", obj_node.children[1].type)
+        assert.equals("main.ali", obj_node.children[1].name)
+      end
+    )
   end)
 
   describe("find_node_by_path", function()
@@ -375,6 +424,47 @@ if os.getenv("ADA_LS_TEST_MODE") then
         local node = items._create_file_node(source, project)
 
         assert.equals("ads", node.ext)
+      end)
+    end)
+
+    describe("_create_object_dir_node", function()
+      local cleanup = nil
+
+      after_each(function()
+        if cleanup then
+          cleanup()
+          cleanup = nil
+        end
+      end)
+
+      it("creates direct file children from the filesystem", function()
+        local temp_root = os.tmpname()
+        os.remove(temp_root)
+        local obj_dir = vim.fs.joinpath(temp_root, "obj")
+        assert.equals(true, vim.fn.mkdir(obj_dir, "p") == 1)
+        local obj_file = vim.fs.joinpath(obj_dir, "main.ali")
+        local file = io.open(obj_file, "w")
+        assert.is_not_nil(file)
+        file:write("")
+        file:close()
+
+        cleanup = function()
+          os.remove(obj_file)
+          os.remove(obj_dir)
+          os.remove(temp_root)
+        end
+
+        local node = items._create_object_dir_node(obj_dir, {
+          id = "proj_1",
+          name = "test_project",
+        })
+
+        assert.equals("directory", node.type)
+        assert.equals("obj (obj)", node.name)
+        assert.is_true(node.extra.is_object_dir)
+        assert.equals(1, #node.children)
+        assert.equals("file", node.children[1].type)
+        assert.equals("main.ali", node.children[1].name)
       end)
     end)
   end)

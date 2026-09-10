@@ -42,6 +42,42 @@ M.default_config = {
   flat_mode = false,
 }
 
+local project_view_opts = nil
+
+---@param opts? { show_runtime?: boolean, show_object_dirs?: boolean, flat_mode?: boolean }
+function M.set_project_view_opts(opts)
+  if opts == nil then
+    project_view_opts = nil
+    return
+  end
+
+  project_view_opts = vim.deepcopy(opts)
+end
+
+---@return { show_runtime: boolean, show_object_dirs: boolean, flat_mode: boolean }
+local function get_effective_opts()
+  local config = M.config or M.default_config
+  local opts = {
+    show_runtime = config.show_runtime,
+    show_object_dirs = config.show_object_dirs,
+    flat_mode = config.flat_mode,
+  }
+
+  if project_view_opts then
+    if project_view_opts.show_runtime ~= nil then
+      opts.show_runtime = project_view_opts.show_runtime
+    end
+    if project_view_opts.show_object_dirs ~= nil then
+      opts.show_object_dirs = project_view_opts.show_object_dirs
+    end
+    if project_view_opts.flat_mode ~= nil then
+      opts.flat_mode = project_view_opts.flat_mode
+    end
+  end
+
+  return opts
+end
+
 function M.setup(config, global_config)
   M.config = config
   M.global_config = global_config
@@ -52,12 +88,12 @@ function M.navigate(state, path, path_to_reveal, callback)
 
   local renderer = require("neo-tree.ui.renderer")
   local items_mod = require("ada_ls.project_view.neo_tree.items")
-  local config = M.config or M.default_config
+  local opts = get_effective_opts()
 
   items_mod.get_items({
-    show_runtime = config.show_runtime,
-    show_object_dirs = config.show_object_dirs,
-    flat_mode = config.flat_mode,
+    show_runtime = opts.show_runtime,
+    show_object_dirs = opts.show_object_dirs,
+    flat_mode = opts.flat_mode,
   }, function(items, err)
     if err then
       require("ada_ls.utils").notify(err, vim.log.levels.WARN)
@@ -81,6 +117,10 @@ function M.navigate(state, path, path_to_reveal, callback)
       callback()
     end
   end)
+end
+
+if os.getenv("ADA_LS_TEST_MODE") then
+  M._get_effective_opts = get_effective_opts
 end
 
 return M
