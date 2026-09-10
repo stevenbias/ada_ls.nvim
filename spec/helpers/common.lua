@@ -549,4 +549,55 @@ function M.require_optional(module_name)
   return pcall(require, module_name)
 end
 
+--- Setup mocks for tree integration testing (vim.bo, vim.wo, data module)
+--- Returns mock_data for test to override fetch() behavior per test
+---@return table mock_data
+function M.setup_tree_integration_mocks()
+  -- Mock vim.bo with per-buffer options storage
+  vim.bo = setmetatable({}, {
+    __index = function(self, buf_id)
+      if not rawget(self, "_buffers") then
+        rawset(self, "_buffers", {})
+      end
+      local buffers = rawget(self, "_buffers")
+      if not buffers[buf_id] then
+        buffers[buf_id] = {}
+      end
+      return buffers[buf_id]
+    end,
+  })
+
+  -- Mock vim.wo with per-window options storage
+  vim.wo = setmetatable({}, {
+    __index = function(self, win_id)
+      if not rawget(self, "_windows") then
+        rawset(self, "_windows", {})
+      end
+      local windows = rawget(self, "_windows")
+      if not windows[win_id] then
+        windows[win_id] = {}
+      end
+      return windows[win_id]
+    end,
+  })
+
+  -- Mock vim.cmd for editor commands
+  rawset(vim, "cmd", stub.new())
+
+  -- Load real data module (not pre-mocked)
+  -- This gives us access to parse_response and other functions
+  local data_module = require("ada_ls.project_view.data")
+
+  -- Create wrapper mock with real parse_response but mockable fetch/is_supported
+  local mock_data = {
+    parse_response = data_module.parse_response, -- Real function
+    is_supported = stub.new().returns(true, nil),
+    fetch = stub.new().returns(nil), -- Will be overridden per test
+    find_source = stub.new(),
+  }
+  package.loaded["ada_ls.project_view.data"] = mock_data
+
+  return mock_data
+end
+
 return M
