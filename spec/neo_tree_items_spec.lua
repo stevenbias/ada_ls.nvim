@@ -164,6 +164,46 @@ describe("ada_ls.project_view.neo_tree.items", function()
       -- Root project should be first
       assert.truthy(result_items[1].extra.is_root)
     end)
+
+    it("nests sub-project nodes under the root project", function()
+      local lib_project = {
+        project = {
+          id = "lib_id",
+          name = "lib_project",
+          kind = "library",
+          qualifier = "default",
+          ["simple-name"] = "lib.gpr",
+          ["file-name"] = "/libs/lib.gpr",
+          directory = "/libs",
+          ["is-externally-built"] = false,
+          languages = { "ada" },
+          ["source-directories"] = { "/libs/src" },
+        },
+        imports = {},
+        aggregated = {},
+        extended = {},
+        ["imported-by"] = {},
+        sources = {},
+      }
+
+      local response = common.create_project_view_response()
+      response.projects[1].imports = { "lib_id" }
+      table.insert(response.projects, lib_project)
+      common.setup_lsp_cmd_project_view_mock(response)
+      items = require("ada_ls.project_view.neo_tree.items")
+
+      local result_items
+      items.get_items({ flat_mode = false }, function(i)
+        result_items = i
+      end)
+
+      assert.equals(1, #result_items)
+      local root_node = result_items[1]
+      local subproject_node = root_node.children[#root_node.children]
+      assert.equals("project", subproject_node.type)
+      assert.equals("lib_project", subproject_node.name)
+      assert.is_false(subproject_node.extra.is_root)
+    end)
   end)
 
   describe("find_node_by_path", function()

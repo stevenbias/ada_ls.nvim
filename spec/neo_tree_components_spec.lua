@@ -2,7 +2,6 @@
 local common = require("spec.helpers.common")
 local stub = require("luassert.stub")
 
---- Find a highlight setup call by name
 ---@param calls table Stub calls array
 ---@param name string Highlight group name
 ---@return table|nil opts The highlight options if found
@@ -23,10 +22,8 @@ describe("ada_ls.project_view.neo_tree.components", function()
     common.cleanup_packages()
     common.setup_vim_globals()
 
-    -- Add nvim_set_hl mock
     vim.api.nvim_set_hl = stub.new()
 
-    -- Mock neo-tree common components
     mock_common_components = {
       icon = stub.new().returns({ text = " ", highlight = "NeoTreeFileIcon" }),
       name = stub
@@ -53,12 +50,46 @@ describe("ada_ls.project_view.neo_tree.components", function()
       components = require("ada_ls.project_view.neo_tree.components")
     end)
 
-    it("returns project icon for project nodes", function()
-      local node = { type = "project", extra = {} }
+    it("returns folder icon for collapsed project nodes", function()
+      local node = {
+        type = "project",
+        extra = {},
+        is_expanded = function()
+          return false
+        end,
+      }
       local result = components.icon({}, node, {})
 
-      assert.equals(" ", result.text)
-      assert.equals("NeoTreeAdaProject", result.highlight)
+      assert.equals(" ", result.text)
+      assert.equals("NeoTreeAdaProjectSubproject", result.highlight)
+    end)
+
+    it("returns open folder icon for expanded project nodes", function()
+      local node = {
+        type = "project",
+        extra = {},
+        is_expanded = function()
+          return true
+        end,
+      }
+      local result = components.icon({}, node, {})
+
+      assert.equals(" ", result.text)
+      assert.equals("NeoTreeAdaProjectSubproject", result.highlight)
+    end)
+
+    it("uses root highlight for root project nodes", function()
+      local node = {
+        type = "project",
+        extra = { is_root = true },
+        is_expanded = function()
+          return false
+        end,
+      }
+      local result = components.icon({}, node, {})
+
+      assert.equals(" ", result.text)
+      assert.equals("NeoTreeAdaProjectRoot", result.highlight)
     end)
 
     it("returns runtime icon for runtime project nodes", function()
@@ -69,7 +100,7 @@ describe("ada_ls.project_view.neo_tree.components", function()
       assert.equals("NeoTreeAdaRuntime", result.highlight)
     end)
 
-    it("returns gear icon for object directory nodes", function()
+    it("returns object-dir icon for object directory nodes", function()
       local node = { type = "directory", extra = { is_object_dir = true } }
       local result = components.icon({}, node, {})
 
@@ -89,8 +120,8 @@ describe("ada_ls.project_view.neo_tree.components", function()
         .was_called_with(config, node, state)
     end)
 
-    it("delegates to common for directory nodes without extra", function()
-      local node = { type = "directory", name = "src" }
+    it("delegates to common for plain directory nodes", function()
+      local node = { type = "directory", name = "src", extra = {} }
       local config = {}
       local state = {}
 
@@ -100,21 +131,6 @@ describe("ada_ls.project_view.neo_tree.components", function()
         .stub(mock_common_components.icon)
         .was_called_with(config, node, state)
     end)
-
-    it(
-      "delegates to common for directory nodes without is_object_dir",
-      function()
-        local node = { type = "directory", name = "src", extra = {} }
-        local config = {}
-        local state = {}
-
-        components.icon(config, node, state)
-
-        assert
-          .stub(mock_common_components.icon)
-          .was_called_with(config, node, state)
-      end
-    )
   end)
 
   describe("name", function()
@@ -122,15 +138,27 @@ describe("ada_ls.project_view.neo_tree.components", function()
       components = require("ada_ls.project_view.neo_tree.components")
     end)
 
-    it("uses NeoTreeAdaProject highlight for project nodes", function()
+    it("uses subproject highlight for project nodes", function()
       local node = { type = "project", name = "my_project", extra = {} }
       local result = components.name({}, node, {})
 
       assert.equals("my_project", result.text)
-      assert.equals("NeoTreeAdaProject", result.highlight)
+      assert.equals("NeoTreeAdaProjectSubproject", result.highlight)
     end)
 
-    it("uses NeoTreeAdaRuntime highlight for runtime nodes", function()
+    it("uses root highlight for root project nodes", function()
+      local node = {
+        type = "project",
+        name = "root_project",
+        extra = { is_root = true },
+      }
+      local result = components.name({}, node, {})
+
+      assert.equals("root_project", result.text)
+      assert.equals("NeoTreeAdaProjectRoot", result.highlight)
+    end)
+
+    it("uses runtime highlight for runtime nodes", function()
       local node =
         { type = "project", name = "Runtime", extra = { is_runtime = true } }
       local result = components.name({}, node, {})
@@ -139,7 +167,7 @@ describe("ada_ls.project_view.neo_tree.components", function()
       assert.equals("NeoTreeAdaRuntime", result.highlight)
     end)
 
-    it("uses NeoTreeAdaObjectDir highlight for object dirs", function()
+    it("uses object-dir highlight for object dirs", function()
       local node = {
         type = "directory",
         name = "obj (obj)",
@@ -177,14 +205,29 @@ describe("ada_ls.project_view.neo_tree.components", function()
   end)
 
   describe("highlight setup", function()
-    it("creates NeoTreeAdaProject highlight group", function()
+    it("creates NeoTreeAdaProjectRoot highlight group", function()
       components = require("ada_ls.project_view.neo_tree.components")
       components.icon({}, { type = "project", extra = {} }, {})
 
-      local opts = find_hl_call(vim.api.nvim_set_hl.calls, "NeoTreeAdaProject")
-      assert.is_not_nil(opts, "NeoTreeAdaProject highlight not created")
+      local opts =
+        find_hl_call(vim.api.nvim_set_hl.calls, "NeoTreeAdaProjectRoot")
+      assert.is_not_nil(opts, "NeoTreeAdaProjectRoot highlight not created")
       assert.is_true(opts.default)
-      assert.equals("Directory", opts.link)
+      assert.equals("Title", opts.link)
+      assert.is_true(opts.bold)
+    end)
+
+    it("creates NeoTreeAdaProjectSubproject highlight group", function()
+      components = require("ada_ls.project_view.neo_tree.components")
+      components.icon({}, { type = "project", extra = {} }, {})
+
+      local opts =
+        find_hl_call(vim.api.nvim_set_hl.calls, "NeoTreeAdaProjectSubproject")
+      assert.is_not_nil(
+        opts,
+        "NeoTreeAdaProjectSubproject highlight not created"
+      )
+      assert.equals("Type", opts.link)
     end)
 
     it("creates NeoTreeAdaRuntime highlight group", function()
@@ -206,16 +249,15 @@ describe("ada_ls.project_view.neo_tree.components", function()
       assert.equals("NeoTreeDimText", opts.link)
     end)
 
-    it("only sets up highlights once", function()
+    it("only sets up project highlights once", function()
       components = require("ada_ls.project_view.neo_tree.components")
       components.icon({}, { type = "project", extra = {} }, {})
       components.icon({}, { type = "project", extra = {} }, {})
       components.icon({}, { type = "project", extra = {} }, {})
 
-      -- Count NeoTreeAdaProject calls (should be exactly 1)
       local count = 0
       for _, call in ipairs(vim.api.nvim_set_hl.calls) do
-        if call.vals[2] == "NeoTreeAdaProject" then
+        if call.vals[2] == "NeoTreeAdaProjectRoot" then
           count = count + 1
         end
       end
@@ -228,7 +270,15 @@ describe("ada_ls.project_view.neo_tree.components", function()
       components = require("ada_ls.project_view.neo_tree.components")
 
       assert.is_table(components.highlights)
-      assert.equals("NeoTreeAdaProject", components.highlights.project)
+      assert.equals(
+        "NeoTreeAdaProjectSubproject",
+        components.highlights.project
+      )
+      assert.equals("NeoTreeAdaProjectRoot", components.highlights.project_root)
+      assert.equals(
+        "NeoTreeAdaProjectSubproject",
+        components.highlights.project_subproject
+      )
       assert.equals("NeoTreeAdaRuntime", components.highlights.runtime)
       assert.equals("NeoTreeAdaObjectDir", components.highlights.object_dir)
     end)
@@ -236,8 +286,14 @@ describe("ada_ls.project_view.neo_tree.components", function()
     it("uses exported names in icon results", function()
       components = require("ada_ls.project_view.neo_tree.components")
 
-      local result = components.icon({}, { type = "project", extra = {} }, {})
-      assert.equals(components.highlights.project, result.highlight)
+      local result = components.icon({}, {
+        type = "project",
+        extra = {},
+        is_expanded = function()
+          return false
+        end,
+      }, {})
+      assert.equals(components.highlights.project_subproject, result.highlight)
     end)
 
     it("uses exported names in name results", function()
@@ -248,7 +304,7 @@ describe("ada_ls.project_view.neo_tree.components", function()
         { type = "project", name = "test", extra = {} },
         {}
       )
-      assert.equals(components.highlights.project, result.highlight)
+      assert.equals(components.highlights.project_subproject, result.highlight)
     end)
   end)
 
@@ -256,7 +312,6 @@ describe("ada_ls.project_view.neo_tree.components", function()
     it("includes common components via tbl_deep_extend", function()
       components = require("ada_ls.project_view.neo_tree.components")
 
-      -- Should have inherited indent and git_status from mock
       assert.is_function(components.indent)
       assert.is_function(components.git_status)
     end)
@@ -265,8 +320,14 @@ describe("ada_ls.project_view.neo_tree.components", function()
       components = require("ada_ls.project_view.neo_tree.components")
 
       assert.is_function(components.icon)
-      local result = components.icon({}, { type = "project", extra = {} }, {})
-      assert.equals(" ", result.text)
+      local result = components.icon({}, {
+        type = "project",
+        extra = {},
+        is_expanded = function()
+          return false
+        end,
+      }, {})
+      assert.equals(" ", result.text)
     end)
 
     it("overrides name from common", function()
@@ -278,12 +339,11 @@ describe("ada_ls.project_view.neo_tree.components", function()
         { type = "project", name = "test", extra = {} },
         {}
       )
-      assert.equals("NeoTreeAdaProject", result.highlight)
+      assert.equals("NeoTreeAdaProjectSubproject", result.highlight)
     end)
   end)
 end)
 
--- Test internals when ADA_LS_TEST_MODE is set
 if os.getenv("ADA_LS_TEST_MODE") then
   describe("ada_ls.project_view.neo_tree.components (internals)", function()
     local components
@@ -293,7 +353,6 @@ if os.getenv("ADA_LS_TEST_MODE") then
       common.setup_vim_globals()
       vim.api.nvim_set_hl = stub.new()
 
-      -- Mock neo-tree common components
       package.loaded["neo-tree.sources.common.components"] = {
         icon = function()
           return {}
@@ -314,9 +373,47 @@ if os.getenv("ADA_LS_TEST_MODE") then
     describe("_icons", function()
       it("exposes icon constants for testing", function()
         assert.is_table(components._icons)
-        assert.equals(" ", components._icons.project)
+        assert.equals(" ", components._icons.project_closed)
+        assert.equals(" ", components._icons.project_open)
         assert.equals(" ", components._icons.runtime)
         assert.equals(" ", components._icons.object_dir)
+      end)
+    end)
+
+    describe("_get_project_highlight", function()
+      it("returns root highlight for root nodes", function()
+        local result =
+          components._get_project_highlight({ extra = { is_root = true } })
+
+        assert.equals("NeoTreeAdaProjectRoot", result)
+      end)
+
+      it("returns subproject highlight for non-root nodes", function()
+        local result = components._get_project_highlight({ extra = {} })
+
+        assert.equals("NeoTreeAdaProjectSubproject", result)
+      end)
+    end)
+
+    describe("_get_project_icon", function()
+      it("returns closed folder for collapsed nodes", function()
+        local result = components._get_project_icon({
+          is_expanded = function()
+            return false
+          end,
+        })
+
+        assert.equals(" ", result)
+      end)
+
+      it("returns open folder for expanded nodes", function()
+        local result = components._get_project_icon({
+          is_expanded = function()
+            return true
+          end,
+        })
+
+        assert.equals(" ", result)
       end)
     end)
 
@@ -349,13 +446,10 @@ if os.getenv("ADA_LS_TEST_MODE") then
 
     describe("_reset_common_cache", function()
       it("forces lazy-load on next icon call", function()
-        -- Reset the cache
         components._reset_common_cache()
 
-        -- Call icon for a file (triggers get_common)
         local result = components.icon({}, { type = "file" }, {})
 
-        -- Should have delegated to mock common
         assert.is_table(result)
       end)
 

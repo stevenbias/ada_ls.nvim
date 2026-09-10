@@ -7,6 +7,18 @@ local M = {
 }
 
 M.default_config = {
+  renderers = {
+    project = {
+      { "indent" },
+      { "icon" },
+      {
+        "container",
+        content = {
+          { "name", zindex = 10 },
+        },
+      },
+    },
+  },
   window = {
     position = "left",
     width = 40,

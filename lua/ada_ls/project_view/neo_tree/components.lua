@@ -4,19 +4,42 @@ local M = {}
 
 -- Icons for different node types (nerdfont)
 local ICONS = {
-  project = " ",
+  project_closed = " ",
+  project_open = " ",
   runtime = " ",
   object_dir = " ",
 }
 
 --- Highlight group names (exported for user customization)
 --- Users can customize these groups in their config:
----   vim.api.nvim_set_hl(0, require("ada_ls.project_view.neo_tree.components").highlights.project, { fg = "#E0A526" })
+---   local highlights = require("ada_ls.project_view.neo_tree.components").highlights
+---   vim.api.nvim_set_hl(0, highlights.project_root, { fg = "#E0A526", bold = true })
+---   vim.api.nvim_set_hl(0, highlights.project_subproject, { fg = "#7AA2F7" })
 M.highlights = {
-  project = "NeoTreeAdaProject",
+  project = "NeoTreeAdaProjectSubproject",
+  project_root = "NeoTreeAdaProjectRoot",
+  project_subproject = "NeoTreeAdaProjectSubproject",
   runtime = "NeoTreeAdaRuntime",
   object_dir = "NeoTreeAdaObjectDir",
 }
+
+---@param node table NuiNode for the current node
+---@return string
+local function get_project_highlight(node)
+  if node.extra and node.extra.is_root then
+    return M.highlights.project_root
+  end
+  return M.highlights.project_subproject
+end
+
+---@param node table NuiNode for the current node
+---@return string
+local function get_project_icon(node)
+  if type(node.is_expanded) == "function" and node:is_expanded() then
+    return ICONS.project_open
+  end
+  return ICONS.project_closed
+end
 
 -- Lazy-loaded common components cache
 local _common
@@ -39,11 +62,16 @@ local function setup_highlights()
   end
   highlights_setup = true
 
-  -- Project nodes: bold directory-like
-  vim.api.nvim_set_hl(0, M.highlights.project, {
+  -- Root projects: bold and distinct from regular directories.
+  vim.api.nvim_set_hl(0, M.highlights.project_root, {
     default = true,
-    link = "Directory",
+    link = "Title",
     bold = true,
+  })
+  -- Sub-projects: distinct color from common folder nodes.
+  vim.api.nvim_set_hl(0, M.highlights.project_subproject, {
+    default = true,
+    link = "Type",
   })
   -- Runtime project: dimmed
   vim.api.nvim_set_hl(0, M.highlights.runtime, {
@@ -75,7 +103,10 @@ M.icon = function(config, node, state)
     if node.extra and node.extra.is_runtime then
       return { text = ICONS.runtime, highlight = M.highlights.runtime }
     end
-    return { text = ICONS.project, highlight = M.highlights.project }
+    return {
+      text = get_project_icon(node),
+      highlight = get_project_highlight(node),
+    }
   end
 
   -- Delegate file/directory to common components
@@ -100,7 +131,7 @@ M.name = function(config, node, state)
     if node.extra and node.extra.is_runtime then
       return { text = node.name, highlight = M.highlights.runtime }
     end
-    return { text = node.name, highlight = M.highlights.project }
+    return { text = node.name, highlight = get_project_highlight(node) }
   end
 
   -- Delegate to common components
@@ -110,6 +141,8 @@ end
 -- Export internals for testing
 if os.getenv("ADA_LS_TEST_MODE") then
   M._setup_highlights = setup_highlights
+  M._get_project_highlight = get_project_highlight
+  M._get_project_icon = get_project_icon
   M._reset_highlights_flag = function()
     highlights_setup = false
   end
