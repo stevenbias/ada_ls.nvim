@@ -532,11 +532,15 @@ describe("ada_ls.project_view (init.lua)", function()
       assert.stub(require("ada_ls.project_view.tree").close).was_called()
     end)
 
-    it("toggles builtin tree when backend is builtin", function()
+    it("opens builtin tree when toggled closed", function()
       project_view.setup({ backend = "builtin" })
+      vim.fn.expand = function()
+        return ""
+      end
+
       project_view.toggle()
 
-      assert.stub(require("ada_ls.project_view.tree").toggle).was_called()
+      assert.stub(require("ada_ls.project_view.tree").open).was_called()
     end)
 
     it("checks if tree is open with builtin backend", function()
@@ -568,43 +572,6 @@ describe("ada_ls.project_view (init.lua)", function()
 
       assert.stub(require("ada_ls.project_view.data").invalidate).was_called()
       assert.stub(require("ada_ls.project_view.tree").refresh).was_called()
-    end)
-  end)
-
-  describe("reveal current file", function()
-    before_each(function()
-      project_view = require("ada_ls.project_view")
-      local tree = require("ada_ls.project_view.tree")
-      stub(tree, "is_open").returns(false)
-      stub(tree, "open")
-      stub(tree, "reveal_current_file")
-    end)
-
-    it("opens tree if not open before revealing", function()
-      vim.fn.expand = function()
-        return "/test/current.adb"
-      end
-
-      project_view.reveal()
-
-      assert.stub(require("ada_ls.project_view.tree").open).was_called()
-      assert
-        .stub(require("ada_ls.project_view.tree").reveal_current_file)
-        .was_called()
-    end)
-
-    it("does nothing if no current file", function()
-      vim.fn.expand = function()
-        return ""
-      end
-
-      local tree = require("ada_ls.project_view.tree")
-      stub(tree, "is_open").returns(false)
-      stub(tree, "open")
-
-      project_view.reveal()
-
-      assert.stub(tree.open).was_not_called()
     end)
   end)
 
@@ -1006,67 +973,88 @@ describe("ada_ls.project_view", function()
   end)
 
   describe("toggle", function()
-    it("calls tree.toggle with current state options", function()
-      local toggle_called = false
-      local toggle_call_args = nil
+    it("opens tree and reveals current file when closed", function()
+      local open_called = false
+      local open_call_args = nil
+      local reveal_called = false
+      local revealed_path = nil
       rawset(package.loaded, "ada_ls.project_view.tree", {
         is_open = function()
           return false
         end,
-        toggle = function(opts)
-          toggle_called = true
-          toggle_call_args = opts
+        open = function(opts)
+          open_called = true
+          open_call_args = opts
+        end,
+        close = function() end,
+        reveal_current_file = function(path)
+          reveal_called = true
+          revealed_path = path
         end,
         refresh = function() end,
       })
       project_view = require("ada_ls.project_view")
       project_view.setup({ backend = "builtin" })
+      vim.fn.expand = function()
+        return "/project/src/main.adb"
+      end
 
       project_view.set_option("show_object_dirs", true)
       project_view.toggle()
 
-      assert.is_true(toggle_called)
-      assert.is_true(toggle_call_args.show_object_dirs)
+      assert.is_true(open_called)
+      assert.is_true(open_call_args.show_object_dirs)
+      assert.is_true(reveal_called)
+      assert.equals("/project/src/main.adb", revealed_path)
     end)
-  end)
 
-  describe("reveal", function()
-    it("opens tree if not open before revealing", function()
-      local open_stub = stub.new()
-      local reveal_stub = stub.new()
+    it("opens tree without revealing when there is no current file", function()
+      local open_called = false
+      local reveal_called = false
       rawset(package.loaded, "ada_ls.project_view.tree", {
         is_open = function()
           return false
         end,
-        open = open_stub,
-        reveal_current_file = reveal_stub,
-        refresh = stub.new(),
+        open = function(_opts)
+          open_called = true
+        end,
+        close = function() end,
+        reveal_current_file = function()
+          reveal_called = true
+        end,
+        refresh = function() end,
       })
       project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
+      vim.fn.expand = function()
+        return ""
+      end
 
-      project_view.reveal()
+      project_view.toggle()
 
-      assert.stub(open_stub).was_called()
-      assert.stub(reveal_stub).was_called()
+      assert.is_true(open_called)
+      assert.is_false(reveal_called)
     end)
 
-    it("does not open tree if already open", function()
-      local open_stub = stub.new()
-      local reveal_stub = stub.new()
+    it("closes tree when already open", function()
+      local close_called = false
       rawset(package.loaded, "ada_ls.project_view.tree", {
         is_open = function()
           return true
         end,
-        open = open_stub,
-        reveal_current_file = reveal_stub,
-        refresh = stub.new(),
+        open = function() end,
+        close = function()
+          close_called = true
+        end,
+        reveal_current_file = function() end,
+        refresh = function() end,
       })
       project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
 
-      project_view.reveal()
+      project_view.toggle()
 
-      assert.stub(open_stub).was_not_called()
-      assert.stub(reveal_stub).was_called()
+      assert.is_true(close_called)
     end)
   end)
 
@@ -1187,13 +1175,39 @@ describe("ada_ls.project_view", function()
       assert.stub(close_stub).was_called()
     end)
 
-    it("toggle dispatches to tree when using builtin", function()
-      local toggle_stub = stub.new()
+    it("toggle opens and reveals when using builtin", function()
+      local open_stub = stub.new()
+      local reveal_stub = stub.new()
       rawset(package.loaded, "ada_ls.project_view.tree", {
         is_open = function()
           return false
         end,
-        toggle = toggle_stub,
+        open = open_stub,
+        close = stub.new(),
+        reveal_current_file = reveal_stub,
+        refresh = stub.new(),
+      })
+      project_view = require("ada_ls.project_view")
+      project_view.setup({ backend = "builtin" })
+      vim.fn.expand = function()
+        return "/project/src/main.adb"
+      end
+
+      project_view.toggle()
+
+      assert.stub(open_stub).was_called()
+      assert.stub(reveal_stub).was_called_with("/project/src/main.adb")
+    end)
+
+    it("toggle closes when using builtin and already open", function()
+      local close_stub = stub.new()
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        is_open = function()
+          return true
+        end,
+        open = stub.new(),
+        close = close_stub,
+        reveal_current_file = stub.new(),
         refresh = stub.new(),
       })
       project_view = require("ada_ls.project_view")
@@ -1201,7 +1215,7 @@ describe("ada_ls.project_view", function()
 
       project_view.toggle()
 
-      assert.stub(toggle_stub).was_called()
+      assert.stub(close_stub).was_called()
     end)
 
     it("is_open checks tree when using builtin", function()

@@ -23,6 +23,15 @@ local function get_view_options()
   }
 end
 
+---@return string?
+local function get_current_file()
+  local current_file = vim.fn.expand("%:p")
+  if current_file == "" then
+    return nil
+  end
+  return current_file
+end
+
 --- Check if neo-tree is available (installed and loaded)
 ---@return boolean
 local function neo_tree_available()
@@ -121,23 +130,39 @@ end
 
 --- Toggle the project view tree
 function M.toggle()
+  local current_file = get_current_file()
+
+  if M.is_open() then
+    M.close()
+    return
+  end
+
   if get_backend() == "neo-tree" then
     require("ada_ls.project_view.neo_tree").set_project_view_opts(
       get_view_options()
     )
-    local ok = pcall(
+    local ok, manager = pcall(require, "neo-tree.sources.manager")
+    if ok and current_file then
+      local nav_ok =
+        pcall(manager.navigate, NEO_TREE_SOURCE_NAME, nil, current_file)
+      if nav_ok then
+        return
+      end
+    end
+
+    local cmd_ok = pcall(
       vim.cmd,
-      "Neotree toggle source=" .. NEO_TREE_SOURCE_NAME .. " position=left"
+      "Neotree source=" .. NEO_TREE_SOURCE_NAME .. " position=left"
     )
-    if ok then
+    if cmd_ok then
       return
     end
   end
-  require("ada_ls.project_view.tree").toggle({
-    flat_mode = state.flat_mode,
-    show_object_dirs = state.show_object_dirs,
-    show_runtime = state.show_runtime,
-  })
+  local tree = require("ada_ls.project_view.tree")
+  tree.open(get_view_options())
+  if current_file then
+    tree.reveal_current_file(current_file)
+  end
 end
 
 --- Check if tree is currently open
@@ -157,39 +182,6 @@ function M.is_open()
     return false
   end
   return require("ada_ls.project_view.tree").is_open()
-end
-
---- Reveal the current file in the project view tree
-function M.reveal()
-  local current_file = vim.fn.expand("%:p")
-  if current_file == "" then
-    return
-  end
-
-  if get_backend() == "neo-tree" then
-    require("ada_ls.project_view.neo_tree").set_project_view_opts(
-      get_view_options()
-    )
-    local ok, manager = pcall(require, "neo-tree.sources.manager")
-    if ok then
-      -- Use manager.navigate with path_to_reveal parameter
-      local nav_ok =
-        pcall(manager.navigate, NEO_TREE_SOURCE_NAME, nil, current_file)
-      if nav_ok then
-        return
-      end
-    end
-  end
-  local tree = require("ada_ls.project_view.tree")
-  -- First make sure tree is open
-  if not tree.is_open() then
-    tree.open({
-      flat_mode = state.flat_mode,
-      show_object_dirs = state.show_object_dirs,
-      show_runtime = state.show_runtime,
-    })
-  end
-  tree.reveal_current_file(current_file)
 end
 
 --- Refresh the project view data and tree

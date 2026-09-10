@@ -190,17 +190,6 @@ describe("plugin/ada_ls.lua - :Als subcommand delegation", function()
     end)
   end)
 
-  describe("reveal subcommand", function()
-    it("delegates to project_view.reveal", function()
-      local project_view = require("ada_ls.project_view")
-      stub(project_view, "reveal")
-
-      project_view.reveal()
-
-      assert.stub(project_view.reveal).was_called()
-    end)
-  end)
-
   describe("unknown subcommand", function()
     it("results in error notification", function()
       vim.notify = stub()

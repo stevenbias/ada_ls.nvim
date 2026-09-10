@@ -64,11 +64,6 @@ local als_subcmd_tbl = {
       require("ada_ls.project_view").toggle()
     end,
   },
-  reveal = {
-    impl = function()
-      require("ada_ls.project_view").reveal()
-    end,
-  },
 }
 
 ---@type table<string, MyCmdSubcommand>

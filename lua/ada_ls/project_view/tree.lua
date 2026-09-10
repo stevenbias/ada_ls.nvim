@@ -677,7 +677,6 @@ local function handle_help()
     "t       Open in new tab",
     "p       Preview file",
     "r       Refresh tree",
-    "R       Reveal current file",
     "zo      Expand node",
     "zc      Collapse node",
     "zM      Collapse all",
@@ -701,7 +700,6 @@ local function setup_keymaps(buf)
   vim.keymap.set("n", "t", handle_open_tab, opts)
   vim.keymap.set("n", "p", handle_preview, opts)
   vim.keymap.set("n", "r", handle_refresh, opts)
-  vim.keymap.set("n", "R", M.reveal_current_file, opts)
   vim.keymap.set("n", "zo", handle_expand, opts)
   vim.keymap.set("n", "zc", handle_collapse, opts)
   vim.keymap.set("n", "zM", handle_collapse_all, opts)

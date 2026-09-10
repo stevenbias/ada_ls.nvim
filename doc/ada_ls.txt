@@ -139,7 +139,6 @@ commands and <leader>s prefix for SPARK commands: >lua
     -- Project View commands
     vim.keymap.set("n", "<leader>av", "<cmd>Als project_view<cr>", { desc = "Als project view" })
     vim.keymap.set("n", "<leader>af", "<cmd>Als project_files<cr>", { desc = "Als project files" })
-    vim.keymap.set("n", "<leader>ar", "<cmd>Als reveal<cr>", { desc = "Als reveal file in project view" })
 
     -- SPARK commands
     vim.keymap.set("n", "<leader>sp", "<cmd>Spark prove<cr>", { desc = "Spark prove project" })
@@ -152,7 +151,7 @@ commands and <leader>s prefix for SPARK commands: >lua
 Mnemonic: ~
     b = build       c = clean       j = JSON config
     p = project     g = GPR pick    o = other file
-    v = view        f = files       r = reveal
+    v = view        f = files
 
 ================================================================================
 COMMANDS                                                  *ada_ls-commands*
@@ -185,17 +184,13 @@ COMMANDS                                                  *ada_ls-commands*
     with the selected file.
 
 :Als project_view                                       *:Als-project_view*
-    Toggle the project tree buffer showing all source files organized
-    by project. Uses neo-tree backend if available, otherwise falls
-    back to builtin tree buffer.
+    Toggle the project tree buffer. When opening, it also reveals the
+    current file in the project tree. Uses neo-tree backend if available,
+    otherwise falls back to the builtin tree buffer.
 
 :Als project_files                                     *:Als-project_files*
     Open a Telescope picker to select a source file from the project.
     Shows all Ada source files across all projects.
-
-:Als reveal                                                   *:Als-reveal*
-    Reveal the current file in the project tree. Opens the tree if
-    not visible and expands to show the current file's location.
 
 :Spark                                                          *:Spark*
     Main command for SPARK formal verification. Provides subcommands
