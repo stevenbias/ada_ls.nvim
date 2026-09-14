@@ -914,6 +914,72 @@ describe("ada_ls.project_view", function()
       local call_args = pick_stub.calls[1].refs[1]
       assert.is_true(call_args.include_runtime)
     end)
+
+    it(
+      "inherits false from state when include_runtime is not provided",
+      function()
+        local pick_stub = stub.new()
+        rawset(package.loaded, "ada_ls.project_view.telescope", {
+          pick_file = pick_stub,
+        })
+        rawset(package.loaded, "ada_ls.project_view.tree", {
+          is_open = function()
+            return false
+          end,
+          refresh = stub.new(),
+        })
+        project_view = require("ada_ls.project_view")
+
+        project_view.set_option("show_runtime", false)
+        project_view.pick_files()
+
+        local call_args = pick_stub.calls[1].refs[1]
+        assert.is_false(call_args.include_runtime)
+      end
+    )
+
+    it(
+      "preserves explicit include_runtime=false even when state is true",
+      function()
+        local pick_stub = stub.new()
+        rawset(package.loaded, "ada_ls.project_view.telescope", {
+          pick_file = pick_stub,
+        })
+        rawset(package.loaded, "ada_ls.project_view.tree", {
+          is_open = function()
+            return false
+          end,
+          refresh = stub.new(),
+        })
+        project_view = require("ada_ls.project_view")
+
+        project_view.set_option("show_runtime", true)
+        project_view.pick_files({ include_runtime = false })
+
+        local call_args = pick_stub.calls[1].refs[1]
+        assert.is_false(call_args.include_runtime)
+      end
+    )
+
+    it("preserves explicit include_runtime=true when state is false", function()
+      local pick_stub = stub.new()
+      rawset(package.loaded, "ada_ls.project_view.telescope", {
+        pick_file = pick_stub,
+      })
+      rawset(package.loaded, "ada_ls.project_view.tree", {
+        is_open = function()
+          return false
+        end,
+        refresh = stub.new(),
+      })
+      project_view = require("ada_ls.project_view")
+
+      project_view.set_option("show_runtime", false)
+      project_view.pick_files({ include_runtime = true })
+
+      local call_args = pick_stub.calls[1].refs[1]
+      assert.is_true(call_args.include_runtime)
+    end)
   end)
 
   describe("pick_project", function()
@@ -1127,6 +1193,72 @@ describe("ada_ls.project_view", function()
           project_view.setup({ backend = "neo-tree" })
 
           assert.is_false(project_view.using_neo_tree())
+        end
+      )
+
+      it("detects neo-tree source registration by source name", function()
+        package.loaded["neo-tree"] = {
+          config = {
+            sources = { "filesystem", "buffers", "ada_project" },
+          },
+        }
+        project_view = require("ada_ls.project_view")
+        project_view.set_neo_tree_available_fn(function()
+          return true
+        end)
+
+        assert.is_true(project_view._neo_tree_source_registered())
+      end)
+
+      it("detects neo-tree source registration by module path", function()
+        package.loaded["neo-tree"] = {
+          config = {
+            sources = {
+              "filesystem",
+              "ada_ls.project_view.neo_tree",
+            },
+          },
+        }
+        project_view = require("ada_ls.project_view")
+        project_view.set_neo_tree_available_fn(function()
+          return true
+        end)
+
+        assert.is_true(project_view._neo_tree_source_registered())
+      end)
+
+      it("returns setup hint when source is not registered", function()
+        package.loaded["neo-tree"] = {
+          config = {
+            sources = { "filesystem", "buffers", "git_status" },
+          },
+        }
+        project_view = require("ada_ls.project_view")
+        project_view.set_neo_tree_available_fn(function()
+          return true
+        end)
+
+        local registered, message = project_view.check_neo_tree_setup()
+        assert.is_false(registered)
+        assert.matches("Add 'ada_ls%.project_view%.neo_tree'", message)
+      end)
+
+      it(
+        "returns true for check_neo_tree_setup when source is registered",
+        function()
+          package.loaded["neo-tree"] = {
+            config = {
+              sources = { "filesystem", "ada_project" },
+            },
+          }
+          project_view = require("ada_ls.project_view")
+          project_view.set_neo_tree_available_fn(function()
+            return true
+          end)
+
+          local registered, message = project_view.check_neo_tree_setup()
+          assert.is_true(registered)
+          assert.is_nil(message)
         end
       )
     end

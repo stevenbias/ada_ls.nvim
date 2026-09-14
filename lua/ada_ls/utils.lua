@@ -187,8 +187,11 @@ function M.get_relative_path(path, base_dir)
   local norm_path = path:gsub("/+$", "")
   local norm_base = base_dir:gsub("/+$", "")
 
-  -- Check if path starts with base_dir
-  if norm_path:sub(1, #norm_base) == norm_base then
+  -- Check if path is base_dir itself or a child of base_dir
+  if
+    norm_path == norm_base
+    or norm_path:sub(1, #norm_base + 1) == norm_base .. "/"
+  then
     local relative = norm_path:sub(#norm_base + 1):gsub("^/", "")
     if relative == "" then
       return "."

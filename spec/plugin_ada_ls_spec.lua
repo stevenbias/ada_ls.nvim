@@ -2,7 +2,38 @@
 local stub = require("luassert.stub")
 local common = require("spec.helpers.common")
 
-describe("plugin/ada_ls.lua - plugin loading", function()
+local function load_plugin_and_capture_commands()
+  local commands = {}
+  package.loaded["plugin.ada_ls"] = nil
+  package.preload["plugin.ada_ls"] = nil
+  vim.g.loaded_ada_ls = false
+  vim.api.nvim_create_user_command = function(name, callback, opts)
+    commands[name] = {
+      callback = callback,
+      opts = opts,
+    }
+  end
+
+  require("plugin.ada_ls")
+  return commands
+end
+
+local function execute_subcommand(commands, cmd_name, subcmd, extra_args)
+  local entry = commands[cmd_name]
+  assert.is_not_nil(entry)
+
+  local fargs = { subcmd }
+  for _, arg in ipairs(extra_args or {}) do
+    table.insert(fargs, arg)
+  end
+
+  entry.callback({
+    name = cmd_name,
+    fargs = fargs,
+  })
+end
+
+describe("plugin/ada_ls.lua", function()
   before_each(function()
     common.cleanup_packages()
     common.setup_vim_globals()
@@ -12,274 +43,260 @@ describe("plugin/ada_ls.lua - plugin loading", function()
     common.cleanup_packages()
   end)
 
-  it("loads without error", function()
-    vim.g.loaded_ada_ls = false
-    vim.api.nvim_create_user_command = stub()
+  describe("plugin loading", function()
+    it("registers :Als and :Spark commands", function()
+      local commands = load_plugin_and_capture_commands()
 
-    require("plugin.ada_ls")
+      assert.is_not_nil(commands.Als)
+      assert.is_not_nil(commands.Spark)
+      assert.equals("+", commands.Als.opts.nargs)
+      assert.equals("+", commands.Spark.opts.nargs)
+      assert.is_true(commands.Als.opts.bang)
+      assert.is_true(commands.Spark.opts.bang)
+    end)
 
-    -- Verify create_user_command was called
-    assert.stub(vim.api.nvim_create_user_command).was_called()
+    it("respects load guard and does not register commands twice", function()
+      vim.g.loaded_ada_ls = true
+      vim.api.nvim_create_user_command = stub.new()
+
+      require("plugin.ada_ls")
+
+      assert.stub(vim.api.nvim_create_user_command).was_not_called()
+    end)
   end)
 
-  it("respects load guard - doesn't reload if already loaded", function()
-    common.cleanup_packages()
-    common.setup_vim_globals()
+  describe(":Als subcommand delegation", function()
+    local commands
 
-    vim.g.loaded_ada_ls = true
-    vim.api.nvim_create_user_command = stub()
+    before_each(function()
+      commands = load_plugin_and_capture_commands()
+    end)
 
-    require("plugin.ada_ls")
+    it("executes build workflow", function()
+      vim.cmd = stub.new()
 
-    -- nvim_create_user_command should not be called
-    assert.stub(vim.api.nvim_create_user_command).was_not_called()
-  end)
-end)
+      execute_subcommand(commands, "Als", "build")
 
-describe("plugin/ada_ls.lua - :Als subcommand delegation", function()
-  -- Test that the dispatcher correctly calls the underlying modules
-  -- We test this by verifying that each module's function is called
-
-  before_each(function()
-    common.cleanup_packages()
-    common.setup_vim_globals()
-  end)
-
-  after_each(function()
-    common.cleanup_packages()
-  end)
-
-  describe("build subcommand", function()
-    it("executes make workflow", function()
-      vim.cmd = stub()
-
-      -- Build a minimal dispatcher that mimics plugin behavior
-      local function dispatch_build()
-        vim.cmd("cclose")
-        vim.cmd("make")
-      end
-
-      dispatch_build()
-
-      -- Check that vim.cmd was called twice
       assert.equals(2, #vim.cmd.calls)
+      assert.equals("cclose", vim.cmd.calls[1].vals[1])
+      assert.equals("make", vim.cmd.calls[2].vals[1])
     end)
-  end)
 
-  describe("clean subcommand", function()
-    it("delegates to gprtools.clean", function()
-      local gprtools = require("ada_ls.gprtools")
-      stub(gprtools, "clean")
+    it("delegates clean to gprtools.clean", function()
+      local clean_stub = stub.new()
+      package.loaded["ada_ls.gprtools"] = {
+        clean = clean_stub,
+      }
 
-      -- Simulate dispatcher calling gprtools.clean
-      gprtools.clean()
+      execute_subcommand(commands, "Als", "clean")
 
-      assert.stub(gprtools.clean).was_called()
+      assert.stub(clean_stub).was_called()
     end)
-  end)
 
-  describe("config subcommand", function()
     it("opens config file when available", function()
-      local utils = require("ada_ls.utils")
-      stub(utils, "get_conf_file").returns("/path/to/config.json")
-      vim.cmd = stub()
-      vim.cmd.edit = stub()
+      local cmd_stub = stub.new()
+      cmd_stub.edit = stub.new()
+      vim.cmd = cmd_stub
 
-      -- Simulate dispatcher logic
-      local config_path = utils.get_conf_file()
-      if config_path then
-        vim.cmd.edit(config_path)
-      end
+      package.loaded["ada_ls.utils"] = {
+        get_conf_file = function()
+          return "/path/to/config.json"
+        end,
+      }
 
-      assert.stub(vim.cmd.edit).was_called()
+      execute_subcommand(commands, "Als", "config")
+
+      assert.stub(cmd_stub.edit).was_called_with("/path/to/config.json")
     end)
 
-    it("handles missing config gracefully", function()
-      local utils = require("ada_ls.utils")
-      stub(utils, "get_conf_file").returns(nil)
-      vim.cmd = stub()
-      vim.cmd.edit = stub()
+    it("does not open config when file is unavailable", function()
+      local cmd_stub = stub.new()
+      cmd_stub.edit = stub.new()
+      vim.cmd = cmd_stub
 
-      -- Simulate dispatcher logic
-      local config_path = utils.get_conf_file()
-      if config_path then
-        vim.cmd.edit(config_path)
-      end
+      package.loaded["ada_ls.utils"] = {
+        get_conf_file = function()
+          return nil
+        end,
+      }
 
-      assert.stub(vim.cmd.edit).was_not_called()
+      execute_subcommand(commands, "Als", "config")
+
+      assert.stub(cmd_stub.edit).was_not_called()
     end)
-  end)
 
-  describe("edit-gpr subcommand", function()
-    it("edits project file when found", function()
-      local lsp_cmd = require("ada_ls.lsp_cmd")
-      stub(lsp_cmd, "get_prj_file").returns("file:///project/test.gpr")
-      vim.cmd = stub()
-      vim.cmd.edit = stub()
+    it("opens project file for edit_gpr when available", function()
+      local cmd_stub = stub.new()
+      cmd_stub.edit = stub.new()
+      vim.cmd = cmd_stub
       vim.uri_to_fname = function(_uri)
         return "/project/test.gpr"
       end
 
-      -- Simulate dispatcher logic
-      local gpr_uri, err = lsp_cmd.get_prj_file()
-      if not gpr_uri then
-        error(err)
-      end
-      vim.cmd.edit(vim.uri_to_fname(gpr_uri))
+      local notify_stub = stub.new()
+      package.loaded["ada_ls.utils"] = {
+        notify = notify_stub,
+      }
+      package.loaded["ada_ls.lsp_cmd"] = {
+        get_prj_file = function()
+          return "file:///project/test.gpr"
+        end,
+      }
 
-      assert.stub(vim.cmd.edit).was_called()
+      execute_subcommand(commands, "Als", "edit_gpr")
+
+      assert.stub(cmd_stub.edit).was_called_with("/project/test.gpr")
+      assert.stub(notify_stub).was_not_called()
     end)
 
-    it("notifies on error", function()
-      local lsp_cmd = require("ada_ls.lsp_cmd")
-      stub(lsp_cmd, "get_prj_file").returns(nil, "No project found")
-      local utils = require("ada_ls.utils")
-      stub(utils, "notify")
+    it("notifies when edit_gpr cannot get a project file", function()
+      local cmd_stub = stub.new()
+      cmd_stub.edit = stub.new()
+      vim.cmd = cmd_stub
 
-      -- Simulate dispatcher logic
-      local gpr_uri, err = lsp_cmd.get_prj_file()
-      if not gpr_uri then
-        utils.notify(err, vim.log.levels.WARN)
-      end
+      local notify_stub = stub.new()
+      package.loaded["ada_ls.utils"] = {
+        notify = notify_stub,
+      }
+      package.loaded["ada_ls.lsp_cmd"] = {
+        get_prj_file = function()
+          return nil, "No project found"
+        end,
+      }
 
-      assert.stub(utils.notify).was_called()
+      execute_subcommand(commands, "Als", "edit_gpr")
+
+      assert
+        .stub(notify_stub)
+        .was_called_with("No project found", vim.log.levels.WARN)
+      assert.stub(cmd_stub.edit).was_not_called()
     end)
-  end)
 
-  describe("other subcommand", function()
-    it("delegates to lsp_cmd.go_to_other", function()
-      local lsp_cmd = require("ada_ls.lsp_cmd")
-      stub(lsp_cmd, "go_to_other")
+    it("delegates other to lsp_cmd.go_to_other", function()
+      local go_to_other_stub = stub.new()
+      package.loaded["ada_ls.lsp_cmd"] = {
+        go_to_other = go_to_other_stub,
+      }
 
-      lsp_cmd.go_to_other()
+      execute_subcommand(commands, "Als", "other")
 
-      assert.stub(lsp_cmd.go_to_other).was_called()
+      assert.stub(go_to_other_stub).was_called()
     end)
-  end)
 
-  describe("pick-gpr subcommand", function()
-    it("delegates to project.pick_gpr_file", function()
-      local project = require("ada_ls.project")
-      stub(project, "pick_gpr_file")
+    it("delegates pick_gpr to project.pick_gpr_file", function()
+      local pick_gpr_stub = stub.new()
+      package.loaded["ada_ls.project"] = {
+        pick_gpr_file = pick_gpr_stub,
+      }
 
-      project.pick_gpr_file()
+      execute_subcommand(commands, "Als", "pick_gpr")
 
-      assert.stub(project.pick_gpr_file).was_called()
+      assert.stub(pick_gpr_stub).was_called()
     end)
-  end)
 
-  describe("project-files subcommand", function()
-    it("delegates to project_view.pick_files", function()
-      local project_view = require("ada_ls.project_view")
-      stub(project_view, "pick_files")
+    it("delegates project_files to project_view.pick_files", function()
+      local pick_files_stub = stub.new()
+      package.loaded["ada_ls.project_view"] = {
+        pick_files = pick_files_stub,
+      }
 
-      project_view.pick_files()
+      execute_subcommand(commands, "Als", "project_files")
 
-      assert.stub(project_view.pick_files).was_called()
+      assert.stub(pick_files_stub).was_called()
     end)
-  end)
 
-  describe("project-view subcommand", function()
-    it("delegates to project_view.toggle", function()
-      local project_view = require("ada_ls.project_view")
-      stub(project_view, "toggle")
+    it("delegates project_view to project_view.toggle", function()
+      local toggle_stub = stub.new()
+      package.loaded["ada_ls.project_view"] = {
+        toggle = toggle_stub,
+      }
 
-      project_view.toggle()
+      execute_subcommand(commands, "Als", "project_view")
 
-      assert.stub(project_view.toggle).was_called()
+      assert.stub(toggle_stub).was_called()
     end)
-  end)
 
-  describe("unknown subcommand", function()
-    it("results in error notification", function()
-      vim.notify = stub()
+    it("notifies for unknown subcommand", function()
+      vim.notify = stub.new()
 
-      -- Simulate handling of unknown command
-      vim.notify("Als: Unknown command: unknown-command", vim.log.levels.ERROR)
+      execute_subcommand(commands, "Als", "unknown_command")
 
-      assert.stub(vim.notify).was_called()
-      -- Check that vim.notify was called at least once
-      assert.truthy(#vim.notify.calls > 0)
-    end)
-  end)
-end)
-
-describe("plugin/ada_ls.lua - :Spark subcommand delegation", function()
-  before_each(function()
-    common.cleanup_packages()
-    common.setup_vim_globals()
-  end)
-
-  after_each(function()
-    common.cleanup_packages()
-  end)
-
-  describe("options subcommand", function()
-    it("delegates to spark.select_options", function()
-      local spark = require("ada_ls.spark")
-      stub(spark, "select_options")
-
-      spark.select_options()
-
-      assert.stub(spark.select_options).was_called()
+      assert
+        .stub(vim.notify)
+        .was_called_with("Als: Unknown command: unknown_command", vim.log.levels.ERROR)
     end)
   end)
 
-  describe("prove subcommand", function()
-    it("delegates to spark.prove", function()
-      local spark = require("ada_ls.spark")
-      stub(spark, "prove")
+  describe(":Spark subcommand delegation", function()
+    local commands
 
-      spark.prove()
-
-      assert.stub(spark.prove).was_called()
+    before_each(function()
+      commands = load_plugin_and_capture_commands()
     end)
-  end)
 
-  describe("prove_file subcommand", function()
-    it("delegates to spark.prove_file", function()
-      local spark = require("ada_ls.spark")
-      stub(spark, "prove_file")
+    it("delegates options to spark.select_options", function()
+      local select_options_stub = stub.new()
+      package.loaded["ada_ls.spark"] = {
+        select_options = select_options_stub,
+      }
 
-      spark.prove_file()
+      execute_subcommand(commands, "Spark", "options")
 
-      assert.stub(spark.prove_file).was_called()
+      assert.stub(select_options_stub).was_called()
     end)
-  end)
 
-  describe("prove_subprogram subcommand", function()
-    it("delegates to spark.prove_subp", function()
-      local spark = require("ada_ls.spark")
-      stub(spark, "prove_subp")
+    it("delegates prove to spark.prove", function()
+      local prove_stub = stub.new()
+      package.loaded["ada_ls.spark"] = {
+        prove = prove_stub,
+      }
 
-      spark.prove_subp()
+      execute_subcommand(commands, "Spark", "prove")
 
-      assert.stub(spark.prove_subp).was_called()
+      assert.stub(prove_stub).was_called()
     end)
-  end)
 
-  describe("clean subcommand", function()
-    it("delegates to spark.clean", function()
-      local spark = require("ada_ls.spark")
-      stub(spark, "clean")
+    it("delegates prove_file to spark.prove_file", function()
+      local prove_file_stub = stub.new()
+      package.loaded["ada_ls.spark"] = {
+        prove_file = prove_file_stub,
+      }
 
-      spark.clean()
+      execute_subcommand(commands, "Spark", "prove_file")
 
-      assert.stub(spark.clean).was_called()
+      assert.stub(prove_file_stub).was_called()
     end)
-  end)
 
-  describe("unknown subcommand", function()
-    it("results in error notification", function()
-      vim.notify = stub()
+    it("delegates prove_subprogram to spark.prove_subp", function()
+      local prove_subp_stub = stub.new()
+      package.loaded["ada_ls.spark"] = {
+        prove_subp = prove_subp_stub,
+      }
 
-      -- Simulate handling of unknown command
-      vim.notify(
-        "Spark: Unknown command: unknown-command",
-        vim.log.levels.ERROR
-      )
+      execute_subcommand(commands, "Spark", "prove_subprogram")
 
-      assert.stub(vim.notify).was_called()
+      assert.stub(prove_subp_stub).was_called()
+    end)
+
+    it("delegates clean to spark.clean", function()
+      local clean_stub = stub.new()
+      package.loaded["ada_ls.spark"] = {
+        clean = clean_stub,
+      }
+
+      execute_subcommand(commands, "Spark", "clean")
+
+      assert.stub(clean_stub).was_called()
+    end)
+
+    it("notifies for unknown subcommand", function()
+      vim.notify = stub.new()
+
+      execute_subcommand(commands, "Spark", "unknown_command")
+
+      assert
+        .stub(vim.notify)
+        .was_called_with("Spark: Unknown command: unknown_command", vim.log.levels.ERROR)
     end)
   end)
 end)

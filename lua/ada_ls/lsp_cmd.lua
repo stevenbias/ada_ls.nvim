@@ -33,8 +33,10 @@ function M.send_command(cmd, args, timeout)
 
   local params = {
     command = cmd,
-    arguments = args and { args } or vim.empty_dict(),
   }
+  if args ~= nil then
+    params.arguments = { args }
+  end
   local result, err
   client:request("workspace/executeCommand", params, function(e, r)
     err = e

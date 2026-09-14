@@ -336,6 +336,23 @@ describe("ada_ls.utils", function()
       )
     end)
 
+    it("does not treat prefix-only paths as inside base directory", function()
+      assert.equals(
+        "file.adb",
+        utils.get_relative_path("/project2/src/file.adb", "/project")
+      )
+    end)
+
+    it(
+      "does not treat sibling names sharing prefix as inside base directory",
+      function()
+        assert.equals(
+          "project-other",
+          utils.get_relative_path("/project-other", "/project")
+        )
+      end
+    )
+
     it("handles trailing slashes in path", function()
       assert.equals("src", utils.get_relative_path("/project/src/", "/project"))
     end)

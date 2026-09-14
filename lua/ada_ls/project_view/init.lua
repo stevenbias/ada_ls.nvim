@@ -56,7 +56,7 @@ local function neo_tree_source_registered()
   end
 
   for _, source in ipairs(sources) do
-    if source == NEO_TREE_SOURCE then
+    if source == NEO_TREE_SOURCE or source == NEO_TREE_SOURCE_NAME then
       return true
     end
   end
@@ -86,7 +86,9 @@ end
 ---@param opts? { include_runtime?: boolean }
 function M.pick_files(opts)
   opts = opts or {}
-  opts.include_runtime = opts.include_runtime or state.show_runtime
+  if opts.include_runtime == nil then
+    opts.include_runtime = state.show_runtime
+  end
   require("ada_ls.project_view.telescope").pick_file(opts)
 end
 

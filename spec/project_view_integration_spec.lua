@@ -372,7 +372,9 @@ then
             end)
 
             it("handles callback for project selection", function()
-              stub(data, "fetch").returns(common.create_project_view_response())
+              local response = common.create_project_view_response()
+              local root_project = response.projects[1].project
+              stub(data, "fetch").returns(response)
 
               local selected_project = nil
               local callback = function(project)
@@ -382,13 +384,59 @@ then
               local utils = require("ada_ls.utils")
               stub(utils, "notify")
 
-              -- Verify callback is a function
-              assert.is_function(callback)
+              local replaced_action
+              local old_actions = package.loaded["telescope.actions"]
+              local old_action_state = package.loaded["telescope.actions.state"]
+              local old_pickers = package.loaded["telescope.pickers"]
 
-              telescope_mod.pick_project({ on_select = callback })
+              package.loaded["telescope.actions"] = {
+                close = function() end,
+                select_default = {
+                  replace = function(_self, fn)
+                    replaced_action = fn
+                  end,
+                },
+              }
+              package.loaded["telescope.actions.state"] = {
+                get_selected_entry = function()
+                  return {
+                    value = {
+                      project = root_project,
+                    },
+                  }
+                end,
+              }
+              package.loaded["telescope.pickers"] = {
+                new = function(_opts, picker_opts)
+                  return {
+                    find = function(_self)
+                      local attach_ok = picker_opts.attach_mappings(
+                        1,
+                        function() end
+                      )
+                      assert.is_true(attach_ok)
+                      assert.is_function(replaced_action)
+                      replaced_action()
+                    end,
+                  }
+                end,
+              }
 
-              assert.stub(data.fetch).was_called()
-              assert.is_not_nil(selected_project)
+              local ok, err = pcall(function()
+                telescope_mod.pick_project({ on_select = callback })
+
+                assert.stub(data.fetch).was_called()
+                assert.is_not_nil(selected_project)
+                assert.equals(root_project.id, selected_project.id)
+              end)
+
+              package.loaded["telescope.actions"] = old_actions
+              package.loaded["telescope.actions.state"] = old_action_state
+              package.loaded["telescope.pickers"] = old_pickers
+
+              if not ok then
+                error(err)
+              end
             end)
           end)
         end
