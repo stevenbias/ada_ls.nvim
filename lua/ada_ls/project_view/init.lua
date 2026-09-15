@@ -69,8 +69,8 @@ local function get_backend()
   if state.backend == "builtin" then
     return "builtin"
   end
-  -- For "neo-tree" or "auto", try neo-tree if available
-  if neo_tree_available_fn() then
+  -- For "neo-tree" or "auto", use it only when the source is registered.
+  if neo_tree_available_fn() and neo_tree_source_registered() then
     return "neo-tree"
   end
   return "builtin"
