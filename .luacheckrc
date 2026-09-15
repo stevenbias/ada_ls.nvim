@@ -6,6 +6,7 @@ globals = {
   "vim.o",
   "vim.g",
   "vim.bo",
+  "vim.wo",
   "vim.lsp",
 }
 

@@ -179,6 +179,9 @@ local function update_project(prj_file, cfg)
   notify_workspace_folders_add(folders)
 
   vim.cmd("cd " .. vim.fs.dirname(folders[1]))
+
+  -- Invalidate project view cache so it refreshes with new project data
+  require("ada_ls.project_view").invalidate()
 end
 
 function M.pick_gpr_file()

@@ -27,8 +27,17 @@ local function als_snippets()
 end
 
 function M.setup(opts)
+  opts = opts or {}
   als_snippets()
   require("ada_ls.spark").setup(opts)
+
+  -- Setup project view with optional neo-tree integration
+  if opts.project_view then
+    require("ada_ls.project_view").setup(opts.project_view)
+  else
+    -- Auto-register neo-tree source if available (default: auto)
+    require("ada_ls.project_view").setup({ backend = "auto" })
+  end
 
   local lspconfig = require("ada_ls.lspconfig").get()
 

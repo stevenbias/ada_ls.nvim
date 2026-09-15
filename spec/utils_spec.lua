@@ -294,4 +294,129 @@ describe("ada_ls.utils", function()
       assert.equals("test.gpr", utils.get_server_project_name())
     end)
   end)
+
+  describe("get_relative_path", function()
+    it("returns empty string for nil path", function()
+      assert.equals("", utils.get_relative_path(nil, "/base"))
+    end)
+
+    it("returns empty string for empty path", function()
+      assert.equals("", utils.get_relative_path("", "/base"))
+    end)
+
+    it("returns basename when base_dir is nil", function()
+      assert.equals(
+        "file.adb",
+        utils.get_relative_path("/project/src/file.adb", nil)
+      )
+    end)
+
+    it("returns basename when base_dir is empty", function()
+      assert.equals(
+        "file.adb",
+        utils.get_relative_path("/project/src/file.adb", "")
+      )
+    end)
+
+    it("returns relative path when inside base directory", function()
+      assert.equals(
+        "src/file.adb",
+        utils.get_relative_path("/project/src/file.adb", "/project")
+      )
+    end)
+
+    it("returns '.' for exact match with base directory", function()
+      assert.equals(".", utils.get_relative_path("/project", "/project"))
+    end)
+
+    it("returns basename when path is outside base directory", function()
+      assert.equals(
+        "other.adb",
+        utils.get_relative_path("/other/path/other.adb", "/project")
+      )
+    end)
+
+    it("does not treat prefix-only paths as inside base directory", function()
+      assert.equals(
+        "file.adb",
+        utils.get_relative_path("/project2/src/file.adb", "/project")
+      )
+    end)
+
+    it(
+      "does not treat sibling names sharing prefix as inside base directory",
+      function()
+        assert.equals(
+          "project-other",
+          utils.get_relative_path("/project-other", "/project")
+        )
+      end
+    )
+
+    it("handles trailing slashes in path", function()
+      assert.equals("src", utils.get_relative_path("/project/src/", "/project"))
+    end)
+
+    it("handles trailing slashes in base_dir", function()
+      assert.equals(
+        "src/file.adb",
+        utils.get_relative_path("/project/src/file.adb", "/project/")
+      )
+    end)
+  end)
+
+  describe("normalize_path", function()
+    it("returns empty string for nil input", function()
+      assert.equals("", utils.normalize_path(nil))
+    end)
+
+    it("returns empty string for empty input", function()
+      assert.equals("", utils.normalize_path(""))
+    end)
+
+    it("returns path unchanged when no trailing slash", function()
+      assert.equals("/project/src", utils.normalize_path("/project/src"))
+    end)
+
+    it("strips single trailing slash", function()
+      assert.equals("/project/src", utils.normalize_path("/project/src/"))
+    end)
+
+    it("strips multiple trailing slashes", function()
+      assert.equals("/project/src", utils.normalize_path("/project/src///"))
+    end)
+
+    it("preserves internal slashes", function()
+      assert.equals(
+        "/project/src/dir",
+        utils.normalize_path("/project/src/dir")
+      )
+    end)
+  end)
+
+  describe("safe_basename", function()
+    it("returns empty string for nil input", function()
+      assert.equals("", utils.safe_basename(nil))
+    end)
+
+    it("returns empty string for empty input", function()
+      assert.equals("", utils.safe_basename(""))
+    end)
+
+    it("returns basename for normal path", function()
+      assert.equals("file.adb", utils.safe_basename("/project/src/file.adb"))
+    end)
+
+    it("returns directory name for directory path", function()
+      assert.equals("src", utils.safe_basename("/project/src"))
+    end)
+
+    it("handles trailing slash correctly", function()
+      assert.equals("src", utils.safe_basename("/project/src/"))
+    end)
+
+    it("handles multiple trailing slashes", function()
+      assert.equals("src", utils.safe_basename("/project/src///"))
+    end)
+  end)
 end)

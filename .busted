@@ -1,7 +1,10 @@
 return {
   _all = {
     coverage = true,
-    lpath = "lua/?.lua;lua/?/init.lua;spec/?.lua;spec/?/init.lua",
+    -- Include project lua files and optional test dependencies from .busted-test-env
+    lpath = "lua/?.lua;lua/?/init.lua;spec/?.lua;spec/?/init.lua"
+      .. ";.busted-test-env/share/lua/5.1/?.lua"
+      .. ";.busted-test-env/share/lua/5.1/?/init.lua",
     lua = "nlua",
   },
   default = {

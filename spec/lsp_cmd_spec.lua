@@ -228,6 +228,51 @@ describe("ada_ls.lsp_cmd", function()
       assert.equals("/path/to/project.gpr", result)
     end)
 
+    it("omits arguments for commands without args", function()
+      local captured_method
+      local captured_params
+      local mock_client = common.create_lsp_client({
+        request = function(_self, method, params, callback)
+          captured_method = method
+          captured_params = params
+          callback(nil, "/path/to/project.gpr")
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.send_command("als-project-file")
+
+      assert.is_nil(err)
+      assert.equals("/path/to/project.gpr", result)
+      assert.equals("workspace/executeCommand", captured_method)
+      assert.same({ command = "als-project-file" }, captured_params)
+      assert.is_nil(captured_params.arguments)
+    end)
+
+    it("wraps command args in a single-element arguments array", function()
+      local captured_params
+      local mock_client = common.create_lsp_client({
+        request = function(_self, _method, params, callback)
+          captured_params = params
+          callback(nil, "ok")
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local arg = {
+        uri = "file:///project/main.gpr",
+        direction = 1,
+      }
+      local result, err = lsp_cmd.send_command("als-gpr-dependencies", arg)
+
+      assert.is_nil(err)
+      assert.equals("ok", result)
+      assert.same({
+        command = "als-gpr-dependencies",
+        arguments = { arg },
+      }, captured_params)
+    end)
+
     it("returns error when command fails", function()
       local mock_client = common.create_lsp_client({
         request = function(_self, _method, _params, callback)

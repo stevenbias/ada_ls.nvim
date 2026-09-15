@@ -26,6 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: lunarmodules/luacheck@v1
+        with:
+          args: lua/ plugin/ after/ spec/
   test-matrix:
     name: Test on Neovim ${{ matrix.neovim_version }}
     runs-on: ubuntu-latest
@@ -40,15 +42,16 @@ jobs:
       - name: Prepare
         run: |
           sudo apt-get update
-          sudo apt-get install -y luarocks
-          sudo luarocks install luacov
+          sudo apt-get install -y build-essential cmake luarocks lua-filesystem neovim
+          sudo luarocks install luacov 0.16.0
+          sudo luarocks install busted 2.2.0
+          sudo luarocks install nlua
       - uses: actions/checkout@v4
-      - name: Run tests with coverage
-        uses: nvim-neorocks/nvim-busted-action@v1
+      - name: Run comprehensive tests (with optional deps)
+        run: bash scripts/run-tests.sh
         env:
           ADA_LS_TEST_MODE: "1"
-        with:
-          nvim_version: ${{ matrix.neovim_version }}
+          NEOVIM_VERSION: ${{ matrix.neovim_version }}
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -65,7 +68,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y luarocks
-          sudo luarocks install luacov
+          sudo luarocks install luacov 0.16.0
       - uses: actions/checkout@v4
       - name: Download stable coverage artifact
         uses: actions/download-artifact@v4

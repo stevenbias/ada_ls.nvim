@@ -2,6 +2,7 @@ return {
     include = {"lua"},
     exclude = {
         ".luarocks/",
+        ".busted%-test%-env/",
         "/tmp",
         "/usr",
         "spec/",
