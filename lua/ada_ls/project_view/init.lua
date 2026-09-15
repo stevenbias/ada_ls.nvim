@@ -50,12 +50,12 @@ local function neo_tree_source_registered()
   end
 
   local neo_tree = require("neo-tree")
-  local sources = neo_tree.config and neo_tree.config.sources
-  if not sources then
+  local config = neo_tree.ensure_config()
+  if not config or type(config.sources) ~= "table" then
     return false
   end
 
-  for _, source in ipairs(sources) do
+  for _, source in ipairs(config.sources) do
     if source == NEO_TREE_SOURCE or source == NEO_TREE_SOURCE_NAME then
       return true
     end

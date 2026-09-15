@@ -452,6 +452,13 @@ then
       local project_view
 
       before_each(function()
+        package.loaded["neo-tree"] = {
+          ensure_config = function()
+            return {
+              sources = { "filesystem", "ada_project" },
+            }
+          end,
+        }
         project_view = require("ada_ls.project_view")
       end)
 

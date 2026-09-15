@@ -38,6 +38,7 @@ function M.cleanup_packages()
   package.preload["ada_ls.project_view.neo_tree.items"] = nil
   package.preload["ada_ls.project_view.neo_tree.commands"] = nil
   package.preload["ada_ls.project_view.neo_tree.components"] = nil
+  package.preload["neo-tree"] = nil
   -- Then clear loaded modules
   package.loaded["ada_ls"] = nil
   package.loaded["ada_ls.utils"] = nil
@@ -56,6 +57,7 @@ function M.cleanup_packages()
   package.loaded["ada_ls.project_view.neo_tree.items"] = nil
   package.loaded["ada_ls.project_view.neo_tree.commands"] = nil
   package.loaded["ada_ls.project_view.neo_tree.components"] = nil
+  package.loaded["neo-tree"] = nil
 end
 
 -- Vim API mocking
