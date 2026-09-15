@@ -269,7 +269,7 @@ if [ -f luacov.stats.out ]; then
   echo ""
   
   # Check if tests failed (failures or errors)
-  if [ "$FAILURES" -gt 0 ] || [ "$ERRORS" -gt 0 ]; then
+if [ "$BUSTED_EXIT" -ne 0 ] || [ "$FAILURES" -gt 0 ] || [ "$ERRORS" -gt 0 ]; then
     echo -e "${RED}✗ FAIL: Tests failed (Failures: $FAILURES, Errors: $ERRORS)${NC}"
     exit 1
   else
