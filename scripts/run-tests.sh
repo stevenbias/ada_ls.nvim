@@ -294,12 +294,11 @@ if [ "$BUSTED_EXIT" -ne 0 ] || [ "$FAILURES" -gt 0 ] || [ "$ERRORS" -gt 0 ]; the
     
     # Attempt to identify which tests are skipped based on common conditions
     # Check if telescope is unavailable
-    if ! grep -q "Telescope.nvim available" /tmp/test_run_output.txt 2>/dev/null; then
+    if [ "$TELESCOPE_AVAILABLE" != true ]; then
       echo "  - Telescope integration tests (unavailable library)"
     fi
-    
-    # Check if neo-tree is unavailable  
-    if ! grep -q "Neo-tree.nvim available" /tmp/test_run_output.txt 2>/dev/null; then
+
+    if [ "$NEO_TREE_AVAILABLE" != true ]; then
       echo "  - Neo-tree backend tests (unavailable library)"
     fi
   else
