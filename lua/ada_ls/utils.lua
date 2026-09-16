@@ -58,6 +58,21 @@ function M.get_ada_ls()
   return M.als
 end
 
+local function get_active_ada_client_name()
+  local bufid = M.get_bufid()
+  local ada_clients = vim.lsp.get_clients({ bufnr = bufid, name = "ada_ls" })
+  if ada_clients and #ada_clients > 0 then
+    return "ada_ls"
+  end
+
+  local gpr_clients = vim.lsp.get_clients({ bufnr = bufid, name = "gpr_ls" })
+  if gpr_clients and #gpr_clients > 0 then
+    return "gpr_ls"
+  end
+
+  return "ada_ls"
+end
+
 function M.get_conf_file()
   local root_dir = require("ada_ls.lsp_cmd").get_root_dir()
   if root_dir == nil then
@@ -131,6 +146,7 @@ function M.notify_server(method, params)
 end
 
 function M.reset_als_client()
+  local client_name = get_active_ada_client_name()
   M.clear()
   if vim.fn.has("nvim-0.12") ~= 1 then
     M.notify(
@@ -140,7 +156,7 @@ function M.reset_als_client()
     )
     return
   end
-  vim.cmd("lsp restart ada_ls")
+  vim.cmd("lsp restart " .. client_name)
 end
 
 function M.clear()

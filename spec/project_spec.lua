@@ -206,6 +206,9 @@ describe("ada_ls.project", function()
 
       assert.equals("/project/only.gpr", project.project_file)
       assert.stub(vim.notify).was_called()
+      assert
+        .stub(vim.api.nvim_set_current_dir)
+        .was_called_with("/absolute/project/")
     end)
   end)
 

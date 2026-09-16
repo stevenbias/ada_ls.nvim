@@ -178,7 +178,9 @@ local function update_project(prj_file, cfg)
   local folders = { get_abspath(M.project_file) }
   notify_workspace_folders_add(folders)
 
-  vim.cmd("cd " .. vim.fs.dirname(folders[1]))
+  if folders[1] and folders[1] ~= "" then
+    vim.api.nvim_set_current_dir(folders[1])
+  end
 
   -- Invalidate project view cache so it refreshes with new project data
   require("ada_ls.project_view").invalidate()

@@ -80,6 +80,7 @@ function M.create_basic_vim_api(custom_api)
     nvim_create_namespace = function()
       return 1
     end,
+    nvim_set_current_dir = stub.new(),
     nvim_buf_set_option = stub.new(),
     nvim_set_option_value = stub.new(),
     nvim__get_runtime = function()
