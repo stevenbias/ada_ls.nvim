@@ -112,8 +112,10 @@ local get_directory_files = node_utils.get_directory_files
 --- Build tree nodes from project data
 ---@param data table ProjectViewData
 ---@param opts { flat_mode: boolean, show_object_dirs: boolean, show_runtime: boolean }
+---@param include_collapsed_files? boolean Include source files under collapsed nodes for filter search
 ---@return TreeNode[]
-local function build_tree(data, opts)
+local function build_tree(data, opts, include_collapsed_files)
+  include_collapsed_files = include_collapsed_files == true
   local nodes = {}
 
   --- Build nodes for a project entry
@@ -136,7 +138,7 @@ local function build_tree(data, opts)
     }
     table.insert(nodes, project_node)
 
-    if is_expanded(project_id) then
+    if is_expanded(project_id) or include_collapsed_files then
       -- Group sources by directory
       local dirs, dir_list = group_sources_by_dir(entry.sources)
 
@@ -157,7 +159,7 @@ local function build_tree(data, opts)
         }
         table.insert(nodes, dir_node)
 
-        if is_expanded(dir_id) then
+        if is_expanded(dir_id) or include_collapsed_files then
           -- Sort files
           local files = dirs[dir]
           node_utils.sort_sources_by_simple_name(files)
@@ -249,7 +251,7 @@ local function build_tree(data, opts)
       project_id = "runtime",
     })
 
-    if is_expanded(runtime_id) then
+    if is_expanded(runtime_id) or include_collapsed_files then
       -- Group runtime sources by directory
       local dirs, dir_list = group_sources_by_dir(runtime.sources)
 
@@ -269,7 +271,7 @@ local function build_tree(data, opts)
           project_id = "runtime",
         })
 
-        if is_expanded(dir_id) then
+        if is_expanded(dir_id) or include_collapsed_files then
           local files = dirs[dir]
           node_utils.sort_sources_by_simple_name(files)
 
@@ -304,35 +306,38 @@ local function filter_nodes(nodes, filter)
 
   local lower_filter = filter:lower()
   local matching_ids = {}
+  local matching_nodes = {}
+  local parent_by_id = {}
+  local stack_by_depth = {}
+
+  for _, node in ipairs(nodes) do
+    stack_by_depth[node.depth] = node
+    local clear_depth = node.depth + 1
+    while stack_by_depth[clear_depth] do
+      stack_by_depth[clear_depth] = nil
+      clear_depth = clear_depth + 1
+    end
+
+    if node.depth > 0 and stack_by_depth[node.depth - 1] then
+      parent_by_id[node.id] = stack_by_depth[node.depth - 1].id
+    end
+  end
 
   -- First pass: find all matching nodes
   for _, node in ipairs(nodes) do
     if node.name:lower():find(lower_filter, 1, true) then
       matching_ids[node.id] = true
+      table.insert(matching_nodes, node)
     end
   end
 
-  -- Second pass: include parents of matching nodes
-  local function include_parents(node_id)
-    for _, node in ipairs(nodes) do
-      if node.id == node_id then
-        -- Find parent by checking if this node's path starts with another's
-        for _, potential_parent in ipairs(nodes) do
-          if
-            potential_parent.expandable
-            and potential_parent.depth < node.depth
-            and node.project_id == potential_parent.project_id
-          then
-            matching_ids[potential_parent.id] = true
-          end
-        end
-        break
-      end
+  -- Second pass: include true ancestors of matching nodes
+  for _, node in ipairs(matching_nodes) do
+    local parent_id = parent_by_id[node.id]
+    while parent_id do
+      matching_ids[parent_id] = true
+      parent_id = parent_by_id[parent_id]
     end
-  end
-
-  for id, _ in pairs(matching_ids) do
-    include_parents(id)
   end
 
   -- Third pass: filter
@@ -704,8 +709,9 @@ function M.open(opts)
   end
 
   -- Build and render tree
-  local nodes = build_tree(data, opts)
-  if tree_state.filter ~= "" then
+  local filtering = tree_state.filter ~= ""
+  local nodes = build_tree(data, opts, filtering)
+  if filtering then
     nodes = filter_nodes(nodes, tree_state.filter)
   end
   render_tree(tree_state.buf, nodes)
@@ -744,8 +750,9 @@ function M.refresh()
     return
   end
 
-  local nodes = build_tree(data, tree_state.opts or {})
-  if tree_state.filter ~= "" then
+  local filtering = tree_state.filter ~= ""
+  local nodes = build_tree(data, tree_state.opts or {}, filtering)
+  if filtering then
     nodes = filter_nodes(nodes, tree_state.filter)
   end
   render_tree(tree_state.buf, nodes)

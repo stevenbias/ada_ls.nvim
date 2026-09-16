@@ -2111,6 +2111,68 @@ if os.getenv("ADA_LS_TEST_MODE") then
         assert.is_true(has_utils)
       end)
 
+      it("includes only true ancestor nodes", function()
+        local nodes = {
+          {
+            id = "project:proj_1:/project.gpr",
+            type = "project",
+            name = "main_project",
+            depth = 0,
+            expandable = true,
+            project_id = "proj_1",
+          },
+          {
+            id = "directory:proj_1:/src",
+            type = "directory",
+            name = "src",
+            path = "/src",
+            depth = 1,
+            expandable = true,
+            project_id = "proj_1",
+          },
+          {
+            id = "file:proj_1:/src/main.adb",
+            type = "file",
+            name = "main.adb",
+            path = "/src/main.adb",
+            depth = 2,
+            expandable = false,
+            project_id = "proj_1",
+          },
+          {
+            id = "directory:proj_1:/tests",
+            type = "directory",
+            name = "tests",
+            path = "/tests",
+            depth = 1,
+            expandable = true,
+            project_id = "proj_1",
+          },
+          {
+            id = "file:proj_1:/tests/test_main.adb",
+            type = "file",
+            name = "helper_test.adb",
+            path = "/tests/helper_test.adb",
+            depth = 2,
+            expandable = false,
+            project_id = "proj_1",
+          },
+        }
+
+        local result = tree._filter_nodes(nodes, "main.adb")
+
+        local names = {}
+        for _, node in ipairs(result) do
+          table.insert(names, node.name)
+        end
+
+        assert.truthy(vim.tbl_contains(names, "main.adb"))
+        assert.truthy(vim.tbl_contains(names, "src"))
+        assert.truthy(vim.tbl_contains(names, "main_project"))
+        assert.is_false(vim.tbl_contains(names, "tests"))
+        assert.is_false(vim.tbl_contains(names, "helper_test.adb"))
+      end)
+
       it("returns empty array when no matches", function()
         local result = tree._filter_nodes(test_nodes, "nonexistent")
         assert.equals(0, #result)

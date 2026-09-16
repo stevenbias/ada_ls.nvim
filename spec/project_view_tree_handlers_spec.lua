@@ -187,24 +187,62 @@ if os.getenv("ADA_LS_TEST_MODE") then
         })
 
         -- Apply filter
-        tree._tree_state.filter = "main"
-        assert.equals("main", tree._tree_state.filter)
+        tree._tree_state.filter = "main.adb"
+        assert.equals("main.adb", tree._tree_state.filter)
 
         -- Refresh tree
         tree.refresh()
 
         -- Verify filter persisted
-        assert.equals("main", tree._tree_state.filter)
+        assert.equals("main.adb", tree._tree_state.filter)
 
-        -- Verify nodes are still filtered (contain matching text)
-        local has_main = false
+        -- Verify file node is matched by filename filter
+        local has_main_file = false
         for _, node in ipairs(tree._tree_state.nodes) do
-          if node.name:lower():find("main") then
-            has_main = true
+          if node.type == "file" and node.name == "main.adb" then
+            has_main_file = true
             break
           end
         end
-        assert.is_true(has_main)
+        assert.is_true(has_main_file)
+      end)
+
+      it("matches file in collapsed directory without expanding it", function()
+        local project_data = common.create_project_view_response()
+        local parsed_data =
+          require("ada_ls.project_view.data").parse_response(project_data)
+        mock_data.fetch.returns(parsed_data)
+
+        tree = require("ada_ls.project_view.tree")
+        tree.open({
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        local src_dir_id = nil
+        for _, node in ipairs(tree._tree_state.nodes) do
+          if node.type == "directory" and node.name == "src" then
+            src_dir_id = node.id
+            break
+          end
+        end
+        assert.is_not_nil(src_dir_id)
+        assert.is_false(tree._tree_state.expanded[src_dir_id] == true)
+
+        tree._tree_state.filter = "utils.ads"
+        tree.refresh()
+
+        local has_utils_file = false
+        for _, node in ipairs(tree._tree_state.nodes) do
+          if node.type == "file" and node.name == "utils.ads" then
+            has_utils_file = true
+            break
+          end
+        end
+
+        assert.is_true(has_utils_file)
+        assert.is_false(tree._tree_state.expanded[src_dir_id] == true)
       end)
 
       it("preserves empty filter through refresh", function()
