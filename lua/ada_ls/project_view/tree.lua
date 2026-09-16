@@ -1,5 +1,6 @@
 -- Project View tree buffer rendering
 local M = {}
+local node_utils = require("ada_ls.project_view.nodes")
 
 -- Tree buffer state
 local tree_state = {
@@ -105,48 +106,8 @@ local function get_node_icon(node)
   return " ", nil
 end
 
---- Group sources by directory
----@param sources table[] List of source objects with 'directory' field
----@return table<string, table[]> dirs Map of directory to sources
----@return string[] sorted_dirs Sorted list of directories
-local function group_sources_by_dir(sources)
-  local dirs = {}
-  for _, source in ipairs(sources) do
-    local dir = source.directory
-    if not dirs[dir] then
-      dirs[dir] = {}
-    end
-    table.insert(dirs[dir], source)
-  end
-  local sorted_dirs = vim.tbl_keys(dirs)
-  table.sort(sorted_dirs)
-  return dirs, sorted_dirs
-end
-
---- Get direct file entries from a directory, sorted alphabetically.
----@param dir_path string
----@return string[]
-local function get_directory_files(dir_path)
-  local fs_dir = vim.fs.dir
-  if type(fs_dir) ~= "function" then
-    return {}
-  end
-
-  local files = {}
-  local ok, iter = pcall(fs_dir, dir_path)
-  if not ok or type(iter) ~= "function" then
-    return files
-  end
-
-  for name, entry_type in iter do
-    if entry_type == "file" then
-      table.insert(files, name)
-    end
-  end
-
-  table.sort(files)
-  return files
-end
+local group_sources_by_dir = node_utils.group_sources_by_dir
+local get_directory_files = node_utils.get_directory_files
 
 --- Build tree nodes from project data
 ---@param data table ProjectViewData
@@ -199,9 +160,7 @@ local function build_tree(data, opts)
         if is_expanded(dir_id) then
           -- Sort files
           local files = dirs[dir]
-          table.sort(files, function(a, b)
-            return a.simple_name < b.simple_name
-          end)
+          node_utils.sort_sources_by_simple_name(files)
 
           for _, source in ipairs(files) do
             local file_id = make_node_id("file", source.file_name, project.id)
@@ -251,29 +210,9 @@ local function build_tree(data, opts)
 
       -- Add sub-projects if not in flat mode
       if not opts.flat_mode then
-        local sub_ids = {}
-        for _, id in ipairs(entry.imports or {}) do
-          table.insert(sub_ids, id)
-        end
-        for _, id in ipairs(entry.aggregated or {}) do
-          table.insert(sub_ids, id)
-        end
-        for _, id in ipairs(entry.extended or {}) do
-          table.insert(sub_ids, id)
-        end
-
-        -- Sort and add sub-projects
-        table.sort(sub_ids, function(a, b)
-          local pa = data.projects[a]
-          local pb = data.projects[b]
-          if pa and pb then
-            return pa.project.name < pb.project.name
-          end
-          return a < b
-        end)
-
-        for _, sub_id in ipairs(sub_ids) do
-          local sub_entry = data.projects[sub_id]
+        for _, sub_entry in
+          ipairs(node_utils.collect_subproject_entries(entry, data))
+        do
           if sub_entry then
             build_project_nodes(sub_entry, depth + 1, false)
           end
@@ -284,21 +223,7 @@ local function build_tree(data, opts)
 
   if opts.flat_mode then
     -- Flat mode: show all projects at root level
-    local project_list = {}
-    for _, entry in pairs(data.projects) do
-      table.insert(project_list, entry)
-    end
-    -- Sort: root first, then alphabetically
-    table.sort(project_list, function(a, b)
-      local a_root = a.project.id == data.root_project_id
-      local b_root = b.project.id == data.root_project_id
-      if a_root ~= b_root then
-        return a_root
-      end
-      return a.project.name < b.project.name
-    end)
-
-    for _, entry in ipairs(project_list) do
+    for _, entry in ipairs(node_utils.list_projects_flat(data)) do
       local is_root = entry.project.id == data.root_project_id
       build_project_nodes(entry, 0, is_root)
     end
@@ -346,9 +271,7 @@ local function build_tree(data, opts)
 
         if is_expanded(dir_id) then
           local files = dirs[dir]
-          table.sort(files, function(a, b)
-            return a.simple_name < b.simple_name
-          end)
+          node_utils.sort_sources_by_simple_name(files)
 
           for _, source in ipairs(files) do
             local file_id = make_node_id("file", source.file_name, "runtime")
