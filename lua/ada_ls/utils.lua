@@ -60,14 +60,20 @@ end
 
 local function get_active_ada_client_name()
   local bufid = M.get_bufid()
-  local ada_clients = vim.lsp.get_clients({ bufnr = bufid, name = "ada_ls" })
-  if ada_clients and #ada_clients > 0 then
-    return "ada_ls"
+  local client_names = { "ada_ls", "gpr_ls" }
+
+  for _, name in ipairs(client_names) do
+    local clients = vim.lsp.get_clients({ bufnr = bufid, name = name })
+    if clients and #clients > 0 then
+      return name
+    end
   end
 
-  local gpr_clients = vim.lsp.get_clients({ bufnr = bufid, name = "gpr_ls" })
-  if gpr_clients and #gpr_clients > 0 then
-    return "gpr_ls"
+  for _, name in ipairs(client_names) do
+    local clients = vim.lsp.get_clients({ name = name })
+    if clients and #clients > 0 then
+      return name
+    end
   end
 
   return "ada_ls"
