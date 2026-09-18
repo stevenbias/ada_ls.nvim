@@ -194,7 +194,7 @@ local function build_tree(data, opts, include_collapsed_files)
           project_id = project.id,
         })
 
-        if is_expanded(obj_id) then
+        if is_expanded(obj_id) or include_collapsed_files then
           for _, file_name in ipairs(get_directory_files(project.object_dir)) do
             local file_path = vim.fs.joinpath(project.object_dir, file_name)
             table.insert(nodes, {

@@ -1842,6 +1842,49 @@ if os.getenv("ADA_LS_TEST_MODE") then
         os.remove(temp_root)
       end)
 
+      it(
+        "includes collapsed object directory files when include_collapsed_files is enabled",
+        function()
+          local temp_root = os.tmpname()
+          os.remove(temp_root)
+          local obj_dir = vim.fs.joinpath(temp_root, "obj")
+          assert.equals(1, vim.fn.mkdir(obj_dir, "p"))
+          local ali_file = vim.fs.joinpath(obj_dir, "main.ali")
+          local file = io.open(ali_file, "w")
+          assert.is_not_nil(file)
+          file:write("")
+          file:close()
+
+          local data = create_test_data()
+          data.projects["proj_1"].project.object_dir = obj_dir
+          tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+
+          local obj_id = tree._make_node_id("object_dir", obj_dir, "proj_1")
+          assert.is_false(tree._tree_state.expanded[obj_id] == true)
+
+          local nodes = tree._build_tree(data, {
+            flat_mode = false,
+            show_object_dirs = true,
+            show_runtime = false,
+          }, true)
+
+          local has_object_file = false
+          for _, node in ipairs(nodes) do
+            if node.type == "file" and node.name == "main.ali" then
+              has_object_file = true
+              break
+            end
+          end
+
+          assert.is_true(has_object_file)
+          assert.is_false(tree._tree_state.expanded[obj_id] == true)
+
+          os.remove(ali_file)
+          os.remove(obj_dir)
+          os.remove(temp_root)
+        end
+      )
+
       it("shows all projects at root in flat mode", function()
         local data = create_test_data({
           imports = { "proj_2" },

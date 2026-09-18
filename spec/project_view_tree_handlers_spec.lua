@@ -245,6 +245,68 @@ if os.getenv("ADA_LS_TEST_MODE") then
         assert.is_false(tree._tree_state.expanded[src_dir_id] == true)
       end)
 
+      it(
+        "matches file in collapsed object directory without expanding it",
+        function()
+          local temp_root = os.tmpname()
+          os.remove(temp_root)
+          local obj_dir = vim.fs.joinpath(temp_root, "obj")
+          local mkdir_ok = os.execute('mkdir -p "' .. obj_dir .. '"')
+          if type(mkdir_ok) == "number" then
+            assert.equals(0, mkdir_ok)
+          else
+            assert.is_true(mkdir_ok)
+          end
+          local obj_file = vim.fs.joinpath(obj_dir, "main.ali")
+          local file = io.open(obj_file, "w")
+          assert.is_not_nil(file)
+          file:write("")
+          file:close()
+
+          local project_data = common.create_project_view_response()
+          local parsed_data =
+            require("ada_ls.project_view.data").parse_response(project_data)
+          local root_id = parsed_data.root_project_id
+          parsed_data.projects[root_id].project.object_dir = obj_dir
+          mock_data.fetch.returns(parsed_data)
+
+          tree = require("ada_ls.project_view.tree")
+          tree.open({
+            flat_mode = false,
+            show_object_dirs = true,
+            show_runtime = false,
+          })
+
+          local obj_node = nil
+          for _, node in ipairs(tree._tree_state.nodes) do
+            if node.type == "object_dir" then
+              obj_node = node
+              break
+            end
+          end
+          assert.is_not_nil(obj_node)
+          assert.is_false(tree._tree_state.expanded[obj_node.id] == true)
+
+          tree._tree_state.filter = "main.ali"
+          tree.refresh()
+
+          local has_obj_file = false
+          for _, node in ipairs(tree._tree_state.nodes) do
+            if node.type == "file" and node.name == "main.ali" then
+              has_obj_file = true
+              break
+            end
+          end
+
+          assert.is_true(has_obj_file)
+          assert.is_false(tree._tree_state.expanded[obj_node.id] == true)
+
+          os.remove(obj_file)
+          os.remove(obj_dir)
+          os.remove(temp_root)
+        end
+      )
+
       it("preserves empty filter through refresh", function()
         -- Create realistic project data
         local project_data = common.create_project_view_response()
