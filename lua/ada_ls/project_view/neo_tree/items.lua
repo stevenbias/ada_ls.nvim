@@ -1,5 +1,6 @@
 -- Transform ALS project view data into neo-tree node format
 local M = {}
+local node_utils = require("ada_ls.project_view.nodes")
 
 --- Generate a unique node ID
 ---@param type string Node type
@@ -10,24 +11,7 @@ local function make_id(type, path, project_id)
   return string.format("%s:%s:%s", type, project_id or "", path)
 end
 
---- Group sources by their directory
----@param sources table[] List of source objects
----@return table<string, table[]> Map of directory path to sources
----@return string[] Sorted list of directory paths
-local function group_by_directory(sources)
-  local dirs = {}
-  for _, source in ipairs(sources) do
-    local dir = source.directory or ""
-    if not dirs[dir] then
-      dirs[dir] = {}
-    end
-    table.insert(dirs[dir], source)
-  end
-
-  local sorted = vim.tbl_keys(dirs)
-  table.sort(sorted)
-  return dirs, sorted
-end
+local group_by_directory = node_utils.group_sources_by_dir
 
 --- Create a file node
 ---@param source table Source info from ALS
@@ -58,9 +42,7 @@ local function create_directory_node(dir_path, sources, project)
   local dir_name = utils.get_relative_path(dir_path, project.directory)
 
   -- Sort files
-  table.sort(sources, function(a, b)
-    return a.simple_name < b.simple_name
-  end)
+  node_utils.sort_sources_by_simple_name(sources)
 
   local children = {}
   for _, source in ipairs(sources) do
@@ -80,30 +62,7 @@ local function create_directory_node(dir_path, sources, project)
   }
 end
 
---- Get direct file entries from a directory, sorted alphabetically.
----@param dir_path string
----@return string[]
-local function get_directory_files(dir_path)
-  local fs_dir = vim.fs.dir
-  if type(fs_dir) ~= "function" then
-    return {}
-  end
-
-  local files = {}
-  local ok, iter = pcall(fs_dir, dir_path)
-  if not ok or type(iter) ~= "function" then
-    return files
-  end
-
-  for name, entry_type in iter do
-    if entry_type == "file" then
-      table.insert(files, name)
-    end
-  end
-
-  table.sort(files)
-  return files
-end
+local get_directory_files = node_utils.get_directory_files
 
 --- Create an object directory node
 ---@param object_dir string Object directory path
@@ -168,35 +127,10 @@ local function create_project_node(entry, data, opts, is_root)
 
   -- Add sub-projects if not in flat mode
   if not opts.flat_mode then
-    local sub_entries = {}
-
-    -- Collect all sub-project IDs
-    for _, id in ipairs(entry.imports or {}) do
-      local sub = data.projects[id]
-      if sub then
-        table.insert(sub_entries, sub)
-      end
-    end
-    for _, id in ipairs(entry.aggregated or {}) do
-      local sub = data.projects[id]
-      if sub then
-        table.insert(sub_entries, sub)
-      end
-    end
-    for _, id in ipairs(entry.extended or {}) do
-      local sub = data.projects[id]
-      if sub then
-        table.insert(sub_entries, sub)
-      end
-    end
-
-    -- Sort sub-projects by name
-    table.sort(sub_entries, function(a, b)
-      return a.project.name < b.project.name
-    end)
-
     -- Create sub-project nodes
-    for _, sub_entry in ipairs(sub_entries) do
+    for _, sub_entry in
+      ipairs(node_utils.collect_subproject_entries(entry, data))
+    do
       table.insert(children, create_project_node(sub_entry, data, opts, false))
     end
   end
@@ -237,9 +171,7 @@ local function create_runtime_node(runtime)
       or { id = "runtime", name = "Runtime", directory = "" }
 
     -- Sort files
-    table.sort(dir_sources, function(a, b)
-      return a.simple_name < b.simple_name
-    end)
+    node_utils.sort_sources_by_simple_name(dir_sources)
 
     local file_children = {}
     for _, source in ipairs(dir_sources) do
@@ -296,22 +228,7 @@ function M.get_items(opts, callback)
 
   if opts.flat_mode then
     -- Flat mode: all projects at root level
-    local project_list = {}
-    for _, entry in pairs(data.projects) do
-      table.insert(project_list, entry)
-    end
-
-    -- Sort: root first, then alphabetically
-    table.sort(project_list, function(a, b)
-      local a_root = a.project.id == data.root_project_id
-      local b_root = b.project.id == data.root_project_id
-      if a_root ~= b_root then
-        return a_root
-      end
-      return a.project.name < b.project.name
-    end)
-
-    for _, entry in ipairs(project_list) do
+    for _, entry in ipairs(node_utils.list_projects_flat(data)) do
       local is_root = entry.project.id == data.root_project_id
       table.insert(items, create_project_node(entry, data, opts, is_root))
     end

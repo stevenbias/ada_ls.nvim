@@ -46,6 +46,9 @@ describe("ada_ls.spark", function()
         return "/tmp"
       end,
       setqflist = stub.new(),
+      executable = function()
+        return 1
+      end,
       len = function(t)
         return #t
       end,
@@ -1121,6 +1124,45 @@ other.ads:5:1: error: cannot prove precondition
         assert.stub(vim.fn.setqflist).was_called()
       end)
 
+      it(
+        "populates quickfix from streamed stdout when result.stdout is nil",
+        function()
+          local captured_callback
+          local captured_stdout
+          rawset(vim, "system", function(_cmd, opts, callback)
+            captured_stdout = opts and opts.stdout
+            captured_callback = callback
+          end)
+
+          local mock_client = common.create_lsp_client({
+            root_dir = "/project/root",
+            request = function(_self, _method, _params, callback)
+              callback(nil, "file:///project/root/test.gpr")
+            end,
+          })
+          common.setup_lsp_client(mock_client)
+          package.loaded["ada_ls.utils"] = nil
+          package.loaded["ada_ls.lsp_cmd"] = nil
+
+          spark.prove()
+
+          assert.is_function(captured_callback)
+          if captured_stdout then
+            captured_stdout(nil, "main.adb:10:5: medium: overflow check\n")
+          end
+          captured_callback({
+            code = 1,
+            stdout = nil,
+            stderr = "",
+          })
+
+          assert.stub(vim.fn.setqflist).was_called()
+          local call_args = vim.fn.setqflist.calls[1].vals
+          local qf_opts = call_args[3]
+          assert.equals(1, #qf_opts.items)
+        end
+      )
+
       it("closes quickfix when no gnatprove output", function()
         local captured_callback
         rawset(vim, "system", function(_cmd, _opts, callback)
@@ -1312,6 +1354,61 @@ other.ads:5:1: error: cannot prove precondition
         assert.is_true(
           common.find_stub_call(notify_stub, "SPARK options saved:")
         )
+      end)
+
+      it("maps selected option values to matching option IDs", function()
+        rawset(package.loaded, "ada_ls.spark.ui", {
+          ask_spark_options = function(callback)
+            callback({ proof_level = 1, options = { 2, 4 } })
+          end,
+        })
+        rawset(package.loaded, "ada_ls.spark.config", {
+          SPARK_OPTIONS = {
+            { id = "multiprocessing" },
+            { id = "no_warnings" },
+            { id = "report_all" },
+            { id = "info" },
+          },
+        })
+        local notify_stub = stub.new()
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = notify_stub,
+        })
+
+        package.loaded["ada_ls.spark"] = nil
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.select_options()
+
+        assert.is_true(
+          common.find_stub_call(
+            notify_stub,
+            "SPARK options saved: no_warnings, info"
+          )
+        )
+      end)
+
+      it("does not run gnatprove when executable is missing", function()
+        vim.fn.executable = function(cmd)
+          if cmd == "gnatprove" then
+            return 0
+          end
+          return 1
+        end
+
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.stub(vim.system).was_not_called()
+        assert.is_true(common.find_stub_call(vim.notify, "gnatprove"))
       end)
 
       it("does nothing when callback returns nil", function()

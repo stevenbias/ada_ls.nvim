@@ -1,5 +1,6 @@
 -- Project View tree buffer rendering
 local M = {}
+local node_utils = require("ada_ls.project_view.nodes")
 
 -- Tree buffer state
 local tree_state = {
@@ -105,54 +106,16 @@ local function get_node_icon(node)
   return " ", nil
 end
 
---- Group sources by directory
----@param sources table[] List of source objects with 'directory' field
----@return table<string, table[]> dirs Map of directory to sources
----@return string[] sorted_dirs Sorted list of directories
-local function group_sources_by_dir(sources)
-  local dirs = {}
-  for _, source in ipairs(sources) do
-    local dir = source.directory
-    if not dirs[dir] then
-      dirs[dir] = {}
-    end
-    table.insert(dirs[dir], source)
-  end
-  local sorted_dirs = vim.tbl_keys(dirs)
-  table.sort(sorted_dirs)
-  return dirs, sorted_dirs
-end
-
---- Get direct file entries from a directory, sorted alphabetically.
----@param dir_path string
----@return string[]
-local function get_directory_files(dir_path)
-  local fs_dir = vim.fs.dir
-  if type(fs_dir) ~= "function" then
-    return {}
-  end
-
-  local files = {}
-  local ok, iter = pcall(fs_dir, dir_path)
-  if not ok or type(iter) ~= "function" then
-    return files
-  end
-
-  for name, entry_type in iter do
-    if entry_type == "file" then
-      table.insert(files, name)
-    end
-  end
-
-  table.sort(files)
-  return files
-end
+local group_sources_by_dir = node_utils.group_sources_by_dir
+local get_directory_files = node_utils.get_directory_files
 
 --- Build tree nodes from project data
 ---@param data table ProjectViewData
 ---@param opts { flat_mode: boolean, show_object_dirs: boolean, show_runtime: boolean }
+---@param include_collapsed_files? boolean Include source files under collapsed nodes for filter search
 ---@return TreeNode[]
-local function build_tree(data, opts)
+local function build_tree(data, opts, include_collapsed_files)
+  include_collapsed_files = include_collapsed_files == true
   local nodes = {}
 
   --- Build nodes for a project entry
@@ -175,7 +138,7 @@ local function build_tree(data, opts)
     }
     table.insert(nodes, project_node)
 
-    if is_expanded(project_id) then
+    if is_expanded(project_id) or include_collapsed_files then
       -- Group sources by directory
       local dirs, dir_list = group_sources_by_dir(entry.sources)
 
@@ -196,12 +159,10 @@ local function build_tree(data, opts)
         }
         table.insert(nodes, dir_node)
 
-        if is_expanded(dir_id) then
+        if is_expanded(dir_id) or include_collapsed_files then
           -- Sort files
           local files = dirs[dir]
-          table.sort(files, function(a, b)
-            return a.simple_name < b.simple_name
-          end)
+          node_utils.sort_sources_by_simple_name(files)
 
           for _, source in ipairs(files) do
             local file_id = make_node_id("file", source.file_name, project.id)
@@ -233,7 +194,7 @@ local function build_tree(data, opts)
           project_id = project.id,
         })
 
-        if is_expanded(obj_id) then
+        if is_expanded(obj_id) or include_collapsed_files then
           for _, file_name in ipairs(get_directory_files(project.object_dir)) do
             local file_path = vim.fs.joinpath(project.object_dir, file_name)
             table.insert(nodes, {
@@ -251,29 +212,9 @@ local function build_tree(data, opts)
 
       -- Add sub-projects if not in flat mode
       if not opts.flat_mode then
-        local sub_ids = {}
-        for _, id in ipairs(entry.imports or {}) do
-          table.insert(sub_ids, id)
-        end
-        for _, id in ipairs(entry.aggregated or {}) do
-          table.insert(sub_ids, id)
-        end
-        for _, id in ipairs(entry.extended or {}) do
-          table.insert(sub_ids, id)
-        end
-
-        -- Sort and add sub-projects
-        table.sort(sub_ids, function(a, b)
-          local pa = data.projects[a]
-          local pb = data.projects[b]
-          if pa and pb then
-            return pa.project.name < pb.project.name
-          end
-          return a < b
-        end)
-
-        for _, sub_id in ipairs(sub_ids) do
-          local sub_entry = data.projects[sub_id]
+        for _, sub_entry in
+          ipairs(node_utils.collect_subproject_entries(entry, data))
+        do
           if sub_entry then
             build_project_nodes(sub_entry, depth + 1, false)
           end
@@ -284,21 +225,7 @@ local function build_tree(data, opts)
 
   if opts.flat_mode then
     -- Flat mode: show all projects at root level
-    local project_list = {}
-    for _, entry in pairs(data.projects) do
-      table.insert(project_list, entry)
-    end
-    -- Sort: root first, then alphabetically
-    table.sort(project_list, function(a, b)
-      local a_root = a.project.id == data.root_project_id
-      local b_root = b.project.id == data.root_project_id
-      if a_root ~= b_root then
-        return a_root
-      end
-      return a.project.name < b.project.name
-    end)
-
-    for _, entry in ipairs(project_list) do
+    for _, entry in ipairs(node_utils.list_projects_flat(data)) do
       local is_root = entry.project.id == data.root_project_id
       build_project_nodes(entry, 0, is_root)
     end
@@ -324,7 +251,7 @@ local function build_tree(data, opts)
       project_id = "runtime",
     })
 
-    if is_expanded(runtime_id) then
+    if is_expanded(runtime_id) or include_collapsed_files then
       -- Group runtime sources by directory
       local dirs, dir_list = group_sources_by_dir(runtime.sources)
 
@@ -344,11 +271,9 @@ local function build_tree(data, opts)
           project_id = "runtime",
         })
 
-        if is_expanded(dir_id) then
+        if is_expanded(dir_id) or include_collapsed_files then
           local files = dirs[dir]
-          table.sort(files, function(a, b)
-            return a.simple_name < b.simple_name
-          end)
+          node_utils.sort_sources_by_simple_name(files)
 
           for _, source in ipairs(files) do
             local file_id = make_node_id("file", source.file_name, "runtime")
@@ -381,35 +306,38 @@ local function filter_nodes(nodes, filter)
 
   local lower_filter = filter:lower()
   local matching_ids = {}
+  local matching_nodes = {}
+  local parent_by_id = {}
+  local stack_by_depth = {}
+
+  for _, node in ipairs(nodes) do
+    stack_by_depth[node.depth] = node
+    local clear_depth = node.depth + 1
+    while stack_by_depth[clear_depth] do
+      stack_by_depth[clear_depth] = nil
+      clear_depth = clear_depth + 1
+    end
+
+    if node.depth > 0 and stack_by_depth[node.depth - 1] then
+      parent_by_id[node.id] = stack_by_depth[node.depth - 1].id
+    end
+  end
 
   -- First pass: find all matching nodes
   for _, node in ipairs(nodes) do
     if node.name:lower():find(lower_filter, 1, true) then
       matching_ids[node.id] = true
+      table.insert(matching_nodes, node)
     end
   end
 
-  -- Second pass: include parents of matching nodes
-  local function include_parents(node_id)
-    for _, node in ipairs(nodes) do
-      if node.id == node_id then
-        -- Find parent by checking if this node's path starts with another's
-        for _, potential_parent in ipairs(nodes) do
-          if
-            potential_parent.expandable
-            and potential_parent.depth < node.depth
-            and node.project_id == potential_parent.project_id
-          then
-            matching_ids[potential_parent.id] = true
-          end
-        end
-        break
-      end
+  -- Second pass: include true ancestors of matching nodes
+  for _, node in ipairs(matching_nodes) do
+    local parent_id = parent_by_id[node.id]
+    while parent_id do
+      matching_ids[parent_id] = true
+      parent_id = parent_by_id[parent_id]
     end
-  end
-
-  for id, _ in pairs(matching_ids) do
-    include_parents(id)
   end
 
   -- Third pass: filter
@@ -781,8 +709,9 @@ function M.open(opts)
   end
 
   -- Build and render tree
-  local nodes = build_tree(data, opts)
-  if tree_state.filter ~= "" then
+  local filtering = tree_state.filter ~= ""
+  local nodes = build_tree(data, opts, filtering)
+  if filtering then
     nodes = filter_nodes(nodes, tree_state.filter)
   end
   render_tree(tree_state.buf, nodes)
@@ -821,8 +750,9 @@ function M.refresh()
     return
   end
 
-  local nodes = build_tree(data, tree_state.opts or {})
-  if tree_state.filter ~= "" then
+  local filtering = tree_state.filter ~= ""
+  local nodes = build_tree(data, tree_state.opts or {}, filtering)
+  if filtering then
     nodes = filter_nodes(nodes, tree_state.filter)
   end
   render_tree(tree_state.buf, nodes)

@@ -206,6 +206,63 @@ describe("ada_ls.project", function()
 
       assert.equals("/project/only.gpr", project.project_file)
       assert.stub(vim.notify).was_called()
+      assert
+        .stub(vim.api.nvim_set_current_dir)
+        .was_called_with("/absolute/project/")
+    end)
+
+    it("falls back to vim.ui.select when telescope is unavailable", function()
+      local gpr1, cleanup_gpr1 =
+        common.create_temp_file("project A is\nend A;\n", ".gpr")
+      local gpr2, cleanup_gpr2 =
+        common.create_temp_file("project B is\nend B;\n", ".gpr")
+
+      vim.fs.find = function(_, opts)
+        if opts and opts.type == "file" and not opts.upward then
+          return { gpr1, gpr2 }
+        end
+        return {}
+      end
+
+      vim.fn.isdirectory = stub.new().returns(0)
+      vim.fn.filereadable = stub.new().returns(1)
+
+      package.preload["ada_ls.lsp_cmd"] = function()
+        return {
+          get_prj_dependencies = function()
+            return nil
+          end,
+          get_root_dir = function()
+            return "/project"
+          end,
+        }
+      end
+      package.loaded["ada_ls.lsp_cmd"] = nil
+
+      local original_require = _G.require
+      _G.require = function(name)
+        if name == "telescope.pickers" then
+          error("module not found")
+        end
+        return original_require(name)
+      end
+
+      local selected
+      rawset(vim, "ui", {
+        select = function(items, _, callback)
+          selected = items[2]
+          callback(items[2])
+        end,
+      })
+
+      project.pick_gpr_file()
+
+      assert.equals(gpr2, selected)
+      assert.equals(gpr2, project.project_file)
+
+      cleanup_gpr1()
+      cleanup_gpr2()
+      _G.require = original_require
     end)
   end)
 
@@ -767,6 +824,53 @@ describe("ada_ls.project", function()
         assert.equals("linux", project.scenario_variables["PLATFORM"])
         cleanup_gpr()
         cleanup_dep()
+      end)
+
+      it("parses external variables without spaces after comma", function()
+        local gpr_content = 'Mode : String := external("MODE","debug");\n'
+          .. 'Arch : String := external("ARCH","x86_64");\n'
+        local temp_gpr, cleanup = common.create_temp_file(gpr_content, ".gpr")
+
+        project.project_file = temp_gpr
+        package.preload["ada_ls.lsp_cmd"] = function()
+          return {
+            get_prj_dependencies = function()
+              return nil
+            end,
+          }
+        end
+        package.loaded["ada_ls.lsp_cmd"] = nil
+        vim.fn.filereadable = stub.new().returns(1)
+
+        project._set_scenario_var()
+
+        assert.equals("debug", project.scenario_variables["MODE"])
+        assert.equals("x86_64", project.scenario_variables["ARCH"])
+        cleanup()
+      end)
+
+      it("ignores malformed external calls without crashing", function()
+        local gpr_content = 'Mode : String := external("MODE");\n'
+          .. 'Arch : String := external("ARCH", "x86_64");\n'
+        local temp_gpr, cleanup = common.create_temp_file(gpr_content, ".gpr")
+
+        project.project_file = temp_gpr
+        package.preload["ada_ls.lsp_cmd"] = function()
+          return {
+            get_prj_dependencies = function()
+              return nil
+            end,
+          }
+        end
+        package.loaded["ada_ls.lsp_cmd"] = nil
+        vim.fn.filereadable = stub.new().returns(1)
+
+        local ok = pcall(project._set_scenario_var)
+
+        assert.is_true(ok)
+        assert.is_nil(project.scenario_variables["MODE"])
+        assert.equals("x86_64", project.scenario_variables["ARCH"])
+        cleanup()
       end)
 
       it("warns when GPR file is not readable", function()

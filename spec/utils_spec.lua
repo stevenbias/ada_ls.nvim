@@ -272,6 +272,69 @@ describe("ada_ls.utils", function()
 
       assert.stub(vim.cmd).was_called_with("lsp restart ada_ls")
     end)
+
+    it("restarts gpr_ls when ada_ls is not active", function()
+      local mock_client = common.create_lsp_client({ name = "gpr_ls" })
+      vim.lsp.get_clients = function(opts)
+        if opts and opts.name == "ada_ls" then
+          return {}
+        end
+        if opts and opts.name == "gpr_ls" then
+          return { mock_client }
+        end
+        return {}
+      end
+      rawset(vim.fn, "has", function(_feature)
+        return 1
+      end)
+
+      utils.reset_als_client()
+
+      assert.stub(vim.cmd).was_called_with("lsp restart gpr_ls")
+    end)
+
+    it(
+      "restarts gpr_ls using global lookup when config buffer has no clients",
+      function()
+        local mock_client = common.create_lsp_client({ name = "gpr_ls" })
+        vim.lsp.get_clients = function(opts)
+          if opts and opts.name == "ada_ls" and opts.bufnr then
+            return {}
+          end
+          if opts and opts.name == "gpr_ls" and opts.bufnr then
+            return {}
+          end
+          if opts and opts.name == "ada_ls" then
+            return {}
+          end
+          if opts and opts.name == "gpr_ls" then
+            return { mock_client }
+          end
+          return {}
+        end
+        rawset(vim.fn, "has", function(_feature)
+          return 1
+        end)
+
+        utils.reset_als_client()
+
+        assert.stub(vim.cmd).was_called_with("lsp restart gpr_ls")
+      end
+    )
+
+    it(
+      "defaults restart target to ada_ls when no Ada client is found",
+      function()
+        vim.lsp.get_clients = stub.new().returns({})
+        rawset(vim.fn, "has", function(_feature)
+          return 1
+        end)
+
+        utils.reset_als_client()
+
+        assert.stub(vim.cmd).was_called_with("lsp restart ada_ls")
+      end
+    )
   end)
 
   describe("get_server_project_name", function()
