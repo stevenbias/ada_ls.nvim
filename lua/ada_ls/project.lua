@@ -106,14 +106,10 @@ local function set_scenario_var()
     end
 
     for line in io.lines(file) do
-      for _ in string.gmatch(line, "external") do
-        local match = string.match(line, '[^"%s]+", "[^%s]+"')
-        match = string.gsub(match, '"', "")
-        local var = {}
-        for w in string.gmatch(match, "([^, ]+)") do
-          table.insert(var, w)
-        end
-        M.scenario_variables[var[1]] = var[2]
+      for key, value in
+        line:gmatch('external%s*%(%s*"([^"]+)"%s*,%s*"([^"]+)"%s*%)')
+      do
+        M.scenario_variables[key] = value
       end
     end
   end
@@ -206,23 +202,45 @@ function M.pick_gpr_file()
     )
     update_project(files[1])
   else
-    require("telescope.pickers")
-      .new(opts, {
-        prompt_title = "Ada project files picker",
-        finder = require("telescope.finders").new_table({ results = files }),
-        sorter = require("telescope.config").values.generic_sorter(opts),
-        attach_mappings = function(prompt_buffer, _)
-          local actions = require("telescope.actions")
-          actions.select_default:replace(function()
-            actions.close(prompt_buffer)
-            local selection =
-              require("telescope.actions.state").get_selected_entry()
-            update_project(selection[1])
-          end)
-          return true
-        end,
-      })
-      :find()
+    local ok_telescope, pickers = pcall(require, "telescope.pickers")
+    if ok_telescope then
+      pickers
+        .new(opts, {
+          prompt_title = "Ada project files picker",
+          finder = require("telescope.finders").new_table({ results = files }),
+          sorter = require("telescope.config").values.generic_sorter(opts),
+          attach_mappings = function(prompt_buffer, _)
+            local actions = require("telescope.actions")
+            actions.select_default:replace(function()
+              actions.close(prompt_buffer)
+              local selection =
+                require("telescope.actions.state").get_selected_entry()
+              update_project(selection[1])
+            end)
+            return true
+          end,
+        })
+        :find()
+      return
+    end
+
+    if vim.ui and type(vim.ui.select) == "function" then
+      vim.ui.select(
+        files,
+        { prompt = "Ada project files picker" },
+        function(choice)
+          if choice then
+            update_project(choice)
+          end
+        end
+      )
+      return
+    end
+
+    utils.notify(
+      "Telescope is required for project picker",
+      vim.log.levels.WARN
+    )
   end
 end
 

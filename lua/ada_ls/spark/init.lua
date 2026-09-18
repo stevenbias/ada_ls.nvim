@@ -120,6 +120,11 @@ local function run_gnatprove(kind, state)
   local notify = require("ada_ls.utils").notify
   local lsp_cmd = require("ada_ls.lsp_cmd")
 
+  if vim.fn.executable("gnatprove") ~= 1 then
+    notify("gnatprove executable not found", vim.log.levels.ERROR)
+    return
+  end
+
   -- Get project file
   local prj_uri, err = lsp_cmd.get_prj_file()
   if not prj_uri then
@@ -152,15 +157,32 @@ local function run_gnatprove(kind, state)
   -- Get working directory
   local cwd = lsp_cmd.get_root_dir() or vim.fn.getcwd()
 
-  -- Run asynchronously
-  vim.system(cmd, {
-    cwd = cwd,
-    text = true,
-    detach = true,
-    stdout = function()
+  local stdout_chunks = {}
+  local stderr_chunks = {}
+  local running_notified = false
+
+  local function handle_stream(chunks, data)
+    if data and data ~= "" then
+      table.insert(chunks, data)
+    end
+    if not running_notified then
+      running_notified = true
       vim.schedule(function()
         vim.notify(kind_display .. " running...")
       end)
+    end
+  end
+
+  -- Run asynchronously
+  local ok, system_err = pcall(vim.system, cmd, {
+    cwd = cwd,
+    text = true,
+    detach = true,
+    stdout = function(_, data)
+      handle_stream(stdout_chunks, data)
+    end,
+    stderr = function(_, data)
+      handle_stream(stderr_chunks, data)
     end,
   }, function(result)
     vim.schedule(function()
@@ -172,10 +194,19 @@ local function run_gnatprove(kind, state)
       end
 
       -- Parse output to quickfix
-      local output = (result.stdout or "") .. (result.stderr or "")
+      local output = (result.stdout or table.concat(stdout_chunks, ""))
+        .. (result.stderr or table.concat(stderr_chunks, ""))
       populate_quickfix(output, cwd)
     end)
   end)
+
+  if not ok then
+    notify(
+      "Failed to start gnatprove: " .. tostring(system_err),
+      vim.log.levels.ERROR
+    )
+    return
+  end
 end
 
 -- Run a SPARK operation with saved options
@@ -245,16 +276,17 @@ end
 function M.select_options()
   require("ada_ls.spark.ui").ask_spark_options(function(state)
     if state then
+      local spark_config = require("ada_ls.spark.config")
       require("ada_ls.utils").notify(
         "SPARK Level saved: " .. state.proof_level,
         vim.log.levels.INFO
       )
       local opts_id = {}
-      for opt in ipairs(state.options) do
-        table.insert(
-          opts_id,
-          require("ada_ls.spark.config").SPARK_OPTIONS[opt].id
-        )
+      for _, option_idx in ipairs(state.options or {}) do
+        local option = spark_config.SPARK_OPTIONS[option_idx]
+        if option and option.id then
+          table.insert(opts_id, option.id)
+        end
       end
       require("ada_ls.utils").notify(
         "SPARK options saved: " .. table.concat(opts_id, ", "),

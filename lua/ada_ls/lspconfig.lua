@@ -93,6 +93,18 @@ local function als_handlers()
   end
 end
 
+local function root_markers()
+  return {
+    ".als.json",
+    "Makefile",
+    ".git",
+    "alire.toml",
+    function(name)
+      return name:match("%.gpr$") or name:match("%.adc$")
+    end,
+  }
+end
+
 function M.get()
   if M.cfg then
     return M.cfg
@@ -107,12 +119,7 @@ function M.get()
     on_attach = on_als_attach,
     handlers = als_handlers(),
     root_dir = function(bufnr, on_dir)
-      on_dir(
-        vim.fs.root(
-          bufnr,
-          { ".als.json", "Makefile", ".git", "alire.toml", "*.gpr", "*.adc" }
-        )
-      )
+      on_dir(vim.fs.root(bufnr, root_markers()))
     end,
     commands = {
       ["als-refactor-add-parameters"] = als_refactor.add_parameter,

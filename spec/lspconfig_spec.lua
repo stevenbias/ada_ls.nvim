@@ -350,6 +350,27 @@ describe("ada_ls.lspconfig", function()
         end)
         assert.is_nil(received_nil)
       end)
+
+      it("passes predicate markers for gpr and adc files", function()
+        local captured_markers
+        rawset(vim.fs, "root", function(_source, markers)
+          captured_markers = markers
+          return "/project/root"
+        end)
+
+        local config = call_get_config()
+        config.root_dir(1, function() end)
+
+        assert.is_table(captured_markers)
+        assert.equals(".als.json", captured_markers[1])
+        assert.equals("Makefile", captured_markers[2])
+        assert.equals(".git", captured_markers[3])
+        assert.equals("alire.toml", captured_markers[4])
+        assert.is_function(captured_markers[5])
+        assert.is_truthy(captured_markers[5]("project.gpr"))
+        assert.is_truthy(captured_markers[5]("config.adc"))
+        assert.is_falsy(captured_markers[5]("main.adb"))
+      end)
     end)
 
     describe("_open_qf_on_make", function()
