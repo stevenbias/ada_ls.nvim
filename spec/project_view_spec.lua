@@ -1954,6 +1954,72 @@ if os.getenv("ADA_LS_TEST_MODE") then
         assert.equals(1, sub_node.depth)
       end)
 
+      it("renders shared sub-project only once in hierarchical mode", function()
+        local data = create_test_data({
+          imports = { "left", "right" },
+        })
+        data.projects["left"] = {
+          project = {
+            id = "left",
+            name = "left_project",
+            file_name = "/project/left.gpr",
+            directory = "/project",
+          },
+          sources = {},
+          imports = { "shared" },
+          aggregated = {},
+          extended = {},
+        }
+        data.projects["right"] = {
+          project = {
+            id = "right",
+            name = "right_project",
+            file_name = "/project/right.gpr",
+            directory = "/project",
+          },
+          sources = {},
+          imports = {},
+          aggregated = { "shared" },
+          extended = {},
+        }
+        data.projects["shared"] = {
+          project = {
+            id = "shared",
+            name = "shared_project",
+            file_name = "/project/shared.gpr",
+            directory = "/project",
+          },
+          sources = {},
+          imports = {},
+          aggregated = {},
+          extended = {},
+        }
+
+        tree._tree_state.expanded["project:proj_1:/project/main.gpr"] = true
+        tree._tree_state.expanded["project:left:/project/left.gpr"] = true
+        tree._tree_state.expanded["project:right:/project/right.gpr"] = true
+
+        local nodes = tree._build_tree(data, {
+          flat_mode = false,
+          show_object_dirs = false,
+          show_runtime = false,
+        })
+
+        local project_names = {}
+        for _, node in ipairs(nodes) do
+          if node.type == "project" then
+            table.insert(project_names, node.name)
+          end
+        end
+        table.sort(project_names)
+
+        assert.equals(4, #project_names)
+        assert.equals("left_project", project_names[1])
+        assert.equals("main_project (Root)", project_names[2])
+        assert.equals("right_project", project_names[3])
+        assert.equals("shared_project", project_names[4])
+      end)
+
       it("shows runtime project when option enabled", function()
         local data = create_test_data({
           runtime_project = {

@@ -144,6 +144,26 @@ describe("ada_ls.project_view.nodes", function()
       assert.equals(1, #result)
       assert.equals("a", result[1].project.id)
     end)
+
+    it("deduplicates repeated IDs across relation lists", function()
+      local data = {
+        projects = {
+          a = { project = { id = "a", name = "alpha" } },
+          b = { project = { id = "b", name = "beta" } },
+        },
+      }
+      local entry = {
+        imports = { "a", "b", "a" },
+        aggregated = { "a" },
+        extended = { "b" },
+      }
+
+      local result = nodes.collect_subproject_entries(entry, data)
+
+      assert.equals(2, #result)
+      assert.equals("a", result[1].project.id)
+      assert.equals("b", result[2].project.id)
+    end)
   end)
 
   describe("list_projects_flat", function()

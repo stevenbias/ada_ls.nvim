@@ -105,9 +105,16 @@ end
 ---@param data table Full ProjectViewData
 ---@param opts table Options (flat_mode, show_object_dirs)
 ---@param is_root boolean Whether this is the root project
+---@param visited_projects? table<string, boolean> Projects already emitted in this tree
 ---@return table Neo-tree node
-local function create_project_node(entry, data, opts, is_root)
+local function create_project_node(entry, data, opts, is_root, visited_projects)
+  visited_projects = visited_projects or {}
   local project = entry.project
+  if visited_projects[project.id] then
+    return nil
+  end
+  visited_projects[project.id] = true
+
   local children = {}
 
   -- Add source directories
@@ -131,7 +138,11 @@ local function create_project_node(entry, data, opts, is_root)
     for _, sub_entry in
       ipairs(node_utils.collect_subproject_entries(entry, data))
     do
-      table.insert(children, create_project_node(sub_entry, data, opts, false))
+      local sub_node =
+        create_project_node(sub_entry, data, opts, false, visited_projects)
+      if sub_node then
+        table.insert(children, sub_node)
+      end
     end
   end
 
@@ -236,7 +247,10 @@ function M.get_items(opts, callback)
     -- Hierarchical mode: start from root
     local root_entry = data.projects[data.root_project_id]
     if root_entry then
-      table.insert(items, create_project_node(root_entry, data, opts, true))
+      local root_node = create_project_node(root_entry, data, opts, true, {})
+      if root_node then
+        table.insert(items, root_node)
+      end
     end
   end
 

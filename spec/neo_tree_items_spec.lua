@@ -214,6 +214,77 @@ describe("ada_ls.project_view.neo_tree.items", function()
       assert.is_false(subproject_node.extra.is_root)
     end)
 
+    it("emits shared sub-project only once in hierarchical mode", function()
+      local function make_project(id, name, file_name, rels)
+        rels = rels or {}
+        return {
+          project = {
+            id = id,
+            name = name,
+            kind = "library",
+            qualifier = "default",
+            ["simple-name"] = file_name,
+            ["file-name"] = "/project/" .. file_name,
+            directory = "/project",
+            ["is-externally-built"] = false,
+            languages = { "ada" },
+            ["source-directories"] = { "/project/src" },
+          },
+          imports = rels.imports or {},
+          aggregated = rels.aggregated or {},
+          extended = rels.extended or {},
+          ["imported-by"] = {},
+          sources = {},
+        }
+      end
+
+      local response = common.create_project_view_response({
+        projects = {
+          make_project("root", "root", "root.gpr", {
+            imports = { "left", "right" },
+          }),
+          make_project("left", "left", "left.gpr", {
+            imports = { "shared" },
+          }),
+          make_project("right", "right", "right.gpr", {
+            aggregated = { "shared" },
+          }),
+          make_project("shared", "shared", "shared.gpr"),
+        },
+      })
+      response.tree["root-project"] = { id = "root" }
+
+      common.setup_lsp_cmd_project_view_mock(response)
+      items = require("ada_ls.project_view.neo_tree.items")
+
+      local result_items
+      items.get_items({ flat_mode = false }, function(i)
+        result_items = i
+      end)
+
+      local project_ids = {}
+      local function collect_project_ids(nodes)
+        for _, node in ipairs(nodes or {}) do
+          if
+            node.type == "project"
+            and node.extra
+            and node.extra.project_id
+          then
+            table.insert(project_ids, node.extra.project_id)
+          end
+          collect_project_ids(node.children)
+        end
+      end
+      collect_project_ids(result_items)
+
+      table.sort(project_ids)
+      assert.equals(4, #project_ids)
+      assert.equals("left", project_ids[1])
+      assert.equals("right", project_ids[2])
+      assert.equals("root", project_ids[3])
+      assert.equals("shared", project_ids[4])
+    end)
+
     it(
       "adds object directory with direct file children when enabled",
       function()

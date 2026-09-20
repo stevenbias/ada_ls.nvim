@@ -117,6 +117,7 @@ local get_directory_files = node_utils.get_directory_files
 local function build_tree(data, opts, include_collapsed_files)
   include_collapsed_files = include_collapsed_files == true
   local nodes = {}
+  local visited_projects = {}
 
   --- Build nodes for a project entry
   ---@param entry table ProjectEntry
@@ -124,6 +125,11 @@ local function build_tree(data, opts, include_collapsed_files)
   ---@param is_root boolean
   local function build_project_nodes(entry, depth, is_root)
     local project = entry.project
+    if visited_projects[project.id] then
+      return
+    end
+    visited_projects[project.id] = true
+
     local project_id = make_node_id("project", project.file_name, project.id)
 
     local project_node = {

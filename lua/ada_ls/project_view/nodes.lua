@@ -59,24 +59,28 @@ end
 ---@return table[]
 function M.collect_subproject_entries(entry, data)
   local sub_entries = {}
+  local seen_ids = {}
+
+  local function add_subproject(id)
+    if seen_ids[id] then
+      return
+    end
+
+    local sub = data.projects[id]
+    if sub then
+      seen_ids[id] = true
+      table.insert(sub_entries, sub)
+    end
+  end
 
   for _, id in ipairs(entry.imports or {}) do
-    local sub = data.projects[id]
-    if sub then
-      table.insert(sub_entries, sub)
-    end
+    add_subproject(id)
   end
   for _, id in ipairs(entry.aggregated or {}) do
-    local sub = data.projects[id]
-    if sub then
-      table.insert(sub_entries, sub)
-    end
+    add_subproject(id)
   end
   for _, id in ipairs(entry.extended or {}) do
-    local sub = data.projects[id]
-    if sub then
-      table.insert(sub_entries, sub)
-    end
+    add_subproject(id)
   end
 
   table.sort(sub_entries, function(a, b)
