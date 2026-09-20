@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/stevenbias/ada_ls.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/stevenbias/ada_ls.nvim/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Neovim](https://img.shields.io/badge/Neovim-0.12+-green.svg)](https://neovim.io)
+[![Neovim](https://img.shields.io/badge/Neovim-0.11+-green.svg)](https://neovim.io)
 
 Neovim plugin providing out-of-the-box Ada Language Server integration: GPR
 project management, project view, build commands, GPR file support, VS Code-compatible
@@ -25,8 +25,8 @@ snippets and SPARK formal verification.
 
 - **Neovim** >= 0.11 (developed and tested on 0.12)
 - **[Ada Language Server](https://github.com/AdaCore/ada_language_server)** - Must be available in `$PATH`
-- **GNAT** - Must be available in `$PATH`
-- **[SPARK](https://github.com/AdaCore/spark2014)** - Formal verification tool for Ada (optional)
+- **GNAT** (`gprbuild`, `gprclean`) - Must be available in `$PATH`
+- **[SPARK](https://github.com/AdaCore/spark2014)** / `gnatprove` - Optional, required only for `:Spark` commands
 
 ## Installation
 
@@ -46,6 +46,8 @@ snippets and SPARK formal verification.
 }
 ```
 
+With `lazy.nvim`, `opts = {}` automatically calls `require("ada_ls").setup({})`.
+
 ### vim-plug
 
 ```vim
@@ -60,6 +62,8 @@ require("ada_ls").setup()
 EOF
 ```
 
+For plugin managers without automatic `opts` handling, call `require("ada_ls").setup()` manually.
+
 ## Usage
 
 ### Quick Start
@@ -68,6 +72,8 @@ EOF
 2. The plugin auto-detects your project and starts ALS
 3. Select a GPR file if not auto-detected: `:Als pick_gpr`
 4. Build your project: `:Als build`
+
+If Telescope is installed, `:Als pick_gpr` uses a Telescope picker. Otherwise it falls back to `vim.ui.select()`.
 
 ### Commands
 
@@ -79,13 +85,28 @@ EOF
 | `:Als config` | Edit project configuration (.als.json) |
 | `:Als edit_gpr` | Open project file |
 | `:Als other` | Go to corresponding .ads/.adb file |
-| `:Als pick_gpr` | Select GPR file via Telescope picker |
+| `:Als pick_gpr` | Select GPR file via Telescope picker or `vim.ui.select()` fallback |
 
 #### Project View commands (ALS 2026.3+)
 | Command | Description |
 |---------|-------------|
 | `:Als project_view` | Toggle project tree buffer and reveal current file when opening |
-| `:Als project_files` | Select source file via Telescope picker |
+| `:Als project_files` | Select source file via Telescope picker (requires Telescope) |
+
+Project View uses the builtin tree by default. To use the neo-tree backend, register the custom source in your neo-tree setup:
+
+```lua
+require("neo-tree").setup({
+  sources = {
+    "filesystem",
+    "buffers",
+    "git_status",
+    "ada_ls.project_view.neo_tree", -- Add this line
+  },
+})
+```
+
+With `project_view.backend = "auto"`, `ada_ls.nvim` uses neo-tree only when that source is registered. Otherwise it falls back to the builtin tree.
 
 #### Spark commands
 | Command | Description |
@@ -97,6 +118,8 @@ EOF
 | `:Spark clean` | Clean proof results |
 
 ### Suggested Keymaps
+
+These keymaps are suggested for convenience, but you can configure your own.
 
 #### Ada keymaps
 ```lua
@@ -124,7 +147,7 @@ This plugin removes the following useless default Ada keymaps:
 
 | Keymap | Mode | Description |
 |--------|------|-------------|
-| `<leader>aj` | normal | Removed |
+| `<leader>aj` | normal, insert | Removed |
 | `<leader>al` | normal, insert | Removed |
 
 ## GPR File Support
@@ -136,6 +159,24 @@ The plugin provides support for GPR project files (`.gpr`):
 - A dedicated LSP instance is started with `ada_language_server --language-gpr`
 
 No additional configuration is required.
+
+## Project Configuration File
+
+The plugin stores the selected project in `.als.json`, created alongside the
+selected GPR file when you use `:Als pick_gpr`.
+
+```json
+{
+  "projectFile": "my_project.gpr",
+  "scenarioVariables": {
+    "MODE": "debug"
+  }
+}
+```
+
+When the plugin writes a new `.als.json`, it stores the project filename rather
+than an absolute path so the file is easier to share across environments.
+Existing configs that already use absolute paths are still supported.
 
 ## Snippets
 
@@ -204,6 +245,10 @@ require("ada_ls").setup({
 | `flat_mode` | boolean | `false` | Show all projects at root level |
 | `show_object_dirs` | boolean | `false` | Show object directory nodes |
 | `show_runtime` | boolean | `false` | Show runtime project sources |
+
+When `backend = "auto"`, neo-tree is used only if `ada_ls.project_view.neo_tree`
+is registered in neo-tree's `sources` list. Otherwise the builtin project tree
+is used.
 
 ### SPARK Proof Levels
 

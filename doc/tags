@@ -29,6 +29,7 @@ ada_ls-keymaps	ada_ls.txt	/*ada_ls-keymaps*
 ada_ls-levels	ada_ls.txt	/*ada_ls-levels*
 ada_ls-license	ada_ls.txt	/*ada_ls-license*
 ada_ls-options	ada_ls.txt	/*ada_ls-options*
+ada_ls-project-view	ada_ls.txt	/*ada_ls-project-view*
 ada_ls-quickstart	ada_ls.txt	/*ada_ls-quickstart*
 ada_ls-requirements	ada_ls.txt	/*ada_ls-requirements*
 ada_ls-root-dir	ada_ls.txt	/*ada_ls-root-dir*

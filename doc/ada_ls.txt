@@ -37,8 +37,9 @@ nvim-lspconfig is required.
 Features:
 - Out-of-the-box ALS configuration (no nvim-lspconfig needed)
 - Automatic GPR project file management
-- Telescope picker for GPR file selection
+- Telescope picker for GPR file selection, with vim.ui.select() fallback
 - gprbuild integration via |:make|
+- Project View with builtin tree and optional neo-tree integration
 - SPARK formal verification with gnatprove
 - Jump between .ads and .adb files
 - GPR file support with treesitter highlighting and dedicated LSP
@@ -52,7 +53,8 @@ REQUIREMENTS                                          *ada_ls-requirements*
 - Neovim >= 0.11 (developed and tested on 0.12)
 - Ada Language Server (ALS) installed and available in PATH
 - GNAT project file (GPR) for your project
-- GNAT toolchain with gprbuild, gprclean, and gnatprove
+- GNAT toolchain with gprbuild and gprclean
+- gnatprove for SPARK commands (optional)
 
 ================================================================================
 DEPENDENCIES                                          *ada_ls-dependencies*
@@ -60,14 +62,20 @@ DEPENDENCIES                                          *ada_ls-dependencies*
 Optional plugins that enhance the experience:
 
 1. telescope.nvim
-   For GPR file picker (:Als pick_gpr)
+   For GPR file picker (:Als pick_gpr) and project file picker
    https://github.com/nvim-telescope/telescope.nvim
 
-2. nvim-notify
+2. neo-tree.nvim
+   For Project View integration (:Als project_view)
+   Register the source module `ada_ls.project_view.neo_tree` in neo-tree's
+   `sources` list to enable the neo-tree backend.
+   https://github.com/nvim-neo-tree/neo-tree.nvim
+
+3. nvim-notify
    For enhanced notifications
    https://github.com/rcarriga/nvim-notify
 
-3. LuaSnip
+4. LuaSnip
    For VS Code-compatible Ada and GPR snippets
    https://github.com/L3MON4D3/LuaSnip
 
@@ -79,6 +87,7 @@ Using lazy.nvim: >lua
       "stevenbias/ada_ls.nvim",
       dependencies = {
         "nvim-telescope/telescope.nvim",  -- optional
+        "nvim-neo-tree/neo-tree.nvim",    -- optional
         "rcarriga/nvim-notify",           -- optional
         "L3MON4D3/LuaSnip",              -- optional, for snippets
       },
@@ -87,8 +96,11 @@ Using lazy.nvim: >lua
     }
 <
 
+With lazy.nvim, `opts = {}` automatically calls `require("ada_ls").setup({})`.
+
 Using vim-plug: >vim
     Plug 'nvim-telescope/telescope.nvim'  " optional
+    Plug 'nvim-neo-tree/neo-tree.nvim'    " optional
     Plug 'rcarriga/nvim-notify'           " optional
     Plug 'L3MON4D3/LuaSnip'              " optional
     Plug 'stevenbias/ada_ls.nvim'
@@ -98,15 +110,19 @@ Using vim-plug: >vim
     EOF
 <
 
+For plugin managers without automatic `opts` handling, call
+`require("ada_ls").setup()` manually.
+
 ================================================================================
 QUICK START                                            *ada_ls-quickstart*
 
-After installation, add to your configuration: >lua
+For plugin managers that do not call setup automatically, add to your
+configuration: >lua
     require("ada_ls").setup()
 <
 
-The plugin automatically configures ALS when you open an Ada or GPR file.
-No manual LSP configuration is needed.
+The plugin automatically configures ALS when you open an Ada or GPR file. No
+manual LSP configuration is needed.
 
 Quick start: ~
 
@@ -121,6 +137,9 @@ Quick start: ~
 5. For SPARK verification: >
        :Spark prove
 <
+
+If Telescope is installed, `:Als pick_gpr` uses a Telescope picker.
+Otherwise it falls back to `vim.ui.select()`.
 
 ================================================================================
 SUGGESTED KEYMAPS                                          *ada_ls-keymaps*
@@ -179,18 +198,21 @@ COMMANDS                                                  *ada_ls-commands*
     go-to-other-file functionality.
 
 :Als pick_gpr                                               *:Als-pick_gpr*
-    Open a Telescope picker to select a GPR file. If only one GPR
-    file is found, it is auto-selected. Creates or updates .als.json
+    Select a GPR file. Uses a Telescope picker when Telescope is
+    available, otherwise falls back to `vim.ui.select()`. If only one
+    GPR file is found, it is auto-selected. Creates or updates .als.json
     with the selected file.
 
 :Als project_view                                       *:Als-project_view*
     Toggle the project tree buffer. When opening, it also reveals the
-    current file in the project tree. Uses neo-tree backend if available,
-    otherwise falls back to the builtin tree buffer.
+    current file in the project tree. Uses neo-tree when the
+    `ada_ls.project_view.neo_tree` source is registered, otherwise falls
+    back to the builtin tree buffer. Project View requires ALS 2026.3 or
+    later.
 
 :Als project_files                                     *:Als-project_files*
     Open a Telescope picker to select a source file from the project.
-    Shows all Ada source files across all projects.
+    Shows all Ada source files across all projects. Requires Telescope.
 
 :Spark                                                          *:Spark*
     Main command for SPARK formal verification. Provides subcommands
@@ -227,6 +249,22 @@ ada_ls.setup({opts})                                        *ada_ls.setup()*
         {opts} (table|nil)  Optional configuration table.
 
     Options: ~
+        project_view.backend (string)
+            Tree backend: "auto", "neo-tree", or "builtin".
+            Default: "auto"
+
+        project_view.flat_mode (boolean)
+            Show all projects at the root level.
+            Default: false
+
+        project_view.show_object_dirs (boolean)
+            Show object directory nodes in Project View.
+            Default: false
+
+        project_view.show_runtime (boolean)
+            Show runtime project sources in Project View.
+            Default: false
+
         spark.proof_level (number)
             Proof level for SPARK verification (0-4).
             Default: 0
@@ -238,12 +276,37 @@ ada_ls.setup({opts})                                        *ada_ls.setup()*
 
     Example configuration: >lua
         require("ada_ls").setup({
+          project_view = {
+            backend = "auto",
+            flat_mode = false,
+            show_object_dirs = false,
+            show_runtime = false,
+          },
           spark = {
             proof_level = 0,
             options = { "multiprocessing", "report_all" },
           }
         })
 <
+
+Project View backends ~                                      *ada_ls-project-view*
+
+    The builtin tree works without extra configuration.
+
+    To use neo-tree, register the source module in your neo-tree setup: >lua
+        require("neo-tree").setup({
+          sources = {
+            "filesystem",
+            "buffers",
+            "git_status",
+            "ada_ls.project_view.neo_tree",
+          },
+        })
+    <
+
+    When `project_view.backend` is "auto", ada_ls.nvim uses neo-tree only
+    when that source is registered. Otherwise it falls back to the builtin
+    tree.
 
 Proof Levels ~                                                  *ada_ls-levels*
 
@@ -349,12 +412,17 @@ FILES                                                        *ada_ls-files*
 
 .als.json
     Project configuration file storing the GPR file path and scenario
-    variables. Created in the project root when using :Als pick_gpr or
-    when ALS provides project information.
+    variables. Created alongside the selected GPR file when using
+    :Als pick_gpr.
+
+    When the plugin writes a new file, it stores the project filename
+    instead of an absolute path so the configuration is easier to share
+    across environments. Existing files that already use absolute paths
+    are still supported.
 
     Structure: >json
         {
-          "projectFile": "/path/to/project.gpr",
+          "projectFile": "project.gpr",
           "scenarioVariables": {}
         }
 <
@@ -427,7 +495,7 @@ FOR MORE HELP ~
 ================================================================================
 CONTRIBUTING                                          *ada_ls-contributing*
 
-Contributions are welcome! See CONTRIBUTING.md in the repository.
+Contributions are welcome via issues and pull requests on GitHub.
 
 Repository: https://github.com/stevenbias/ada_ls.nvim
 
