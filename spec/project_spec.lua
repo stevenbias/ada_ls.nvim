@@ -105,6 +105,38 @@ describe("ada_ls.project", function()
       assert.equals("/project/root/my_project.gpr", config.projectFile)
     end)
 
+    it(
+      "resolves relative project file paths against the config file",
+      function()
+        local temp_dir = os.tmpname()
+        os.remove(temp_dir)
+        os.execute('mkdir -p "' .. temp_dir .. '"')
+        local config_path = temp_dir .. "/.als.json"
+        local file = io.open(config_path, "w")
+        assert.is_not_nil(file)
+        file:write('{"projectFile":"nested/test.gpr"}')
+        file:close()
+
+        rawset(vim.fs, "abspath", function(path)
+          if path:match("^/") then
+            return path
+          end
+          return "/absolute" .. path
+        end)
+        rawset(vim.json, "decode", function()
+          return { projectFile = "nested/test.gpr" }
+        end)
+
+        local prj, _, config = project.decode_json_config(config_path)
+
+        assert.equals(temp_dir .. "/nested/test.gpr", prj)
+        assert.equals(temp_dir .. "/nested/test.gpr", config.projectFile)
+
+        os.remove(config_path)
+        os.execute('rmdir "' .. temp_dir .. '"')
+      end
+    )
+
     it("builds scenario variables string from config", function()
       local fixture_path = common.fixture_path("als_config.json")
       -- Override vim.json.decode to parse our fixture
@@ -264,6 +296,107 @@ describe("ada_ls.project", function()
       cleanup_gpr2()
       _G.require = original_require
     end)
+
+    it(
+      "recomputes inherited scenario variables after notifying the server about the new project",
+      function()
+        local temp_dir = os.tmpname()
+        os.remove(temp_dir)
+        os.execute('mkdir -p "' .. temp_dir .. '/dep"')
+
+        local selected_gpr = temp_dir .. "/othello_stm32f746disco.gpr"
+        local selected_file = io.open(selected_gpr, "w")
+        assert.is_not_nil(selected_file)
+        selected_file:write(
+          "project Othello_Stm32f746disco is\nend Othello_Stm32f746disco;\n"
+        )
+        selected_file:close()
+
+        local dep_gpr = temp_dir .. "/dep/inherited.gpr"
+        local dep_file = io.open(dep_gpr, "w")
+        assert.is_not_nil(dep_file)
+        dep_file:write('Mode : String := external("MODE", "debug");\n')
+        dep_file:close()
+
+        vim.fs.find = function(_, opts)
+          if opts and opts.type == "file" and not opts.upward then
+            return { selected_gpr }
+          end
+          return {}
+        end
+        rawset(vim.fs, "abspath", function(path)
+          if path:match("^/") then
+            return path
+          end
+          return "/absolute" .. path
+        end)
+        vim.fn.isdirectory = stub.new().returns(0)
+        vim.fn.filereadable = stub.new().returns(1)
+
+        local current_project
+        local config_notifications = {}
+        local mock_client = common.create_lsp_client()
+        mock_client.notify = function(_, method, params)
+          if
+            method == "workspace/didChangeConfiguration"
+            and params
+            and params.settings
+            and params.settings.ada
+          then
+            current_project = params.settings.ada.projectFile
+            table.insert(
+              config_notifications,
+              vim.deepcopy(params.settings.ada)
+            )
+          end
+          return true
+        end
+        common.setup_lsp_client(mock_client)
+
+        package.preload["ada_ls.lsp_cmd"] = function()
+          return {
+            get_prj_dependencies = function(prj_file)
+              if
+                prj_file == selected_gpr and current_project == selected_gpr
+              then
+                return { { uri = "file://" .. dep_gpr } }
+              end
+              return nil
+            end,
+            get_root_dir = function()
+              return temp_dir
+            end,
+          }
+        end
+        package.loaded["ada_ls.lsp_cmd"] = nil
+        package.loaded["ada_ls.project"] = nil
+        project = require("ada_ls.project")
+
+        project.pick_gpr_file()
+
+        assert.equals(selected_gpr, project.project_file)
+        assert.equals("debug", project.scenario_variables.MODE)
+        assert.equals(2, #config_notifications)
+        assert.equals(selected_gpr, config_notifications[1].projectFile)
+        assert.is_nil(config_notifications[1].scenarioVariables)
+        assert.equals(selected_gpr, config_notifications[2].projectFile)
+        assert.same(
+          { MODE = "debug" },
+          config_notifications[2].scenarioVariables
+        )
+
+        local saved_cfg = io.open(temp_dir .. "/.als.json", "r")
+        assert.is_not_nil(saved_cfg)
+        if saved_cfg then
+          local content = saved_cfg:read("*a")
+          saved_cfg:close()
+          assert.matches('"projectFile":"othello_stm32f746disco.gpr"', content)
+          assert.matches('"scenarioVariables":%{"MODE":"debug"%}', content)
+        end
+
+        os.execute("rm -rf " .. temp_dir)
+      end
+    )
   end)
 
   describe("clear", function()
@@ -403,6 +536,329 @@ describe("ada_ls.project", function()
       os.remove(temp_file)
       os.remove(temp_gpr)
     end)
+
+    it(
+      "does not change cwd or workspace folders when loading config",
+      function()
+        local mock_client =
+          common.create_lsp_client({ root_dir = "/project/root" })
+        common.setup_lsp_client(mock_client)
+
+        local temp_gpr, cleanup_gpr =
+          common.create_temp_file("project Test is\nend Test;\n", ".gpr")
+        local temp_cfg, cleanup_cfg =
+          common.create_temp_file('{"projectFile": "nested/test.gpr"}')
+
+        rawset(vim.fs, "joinpath", function(dir, file)
+          return dir .. "/" .. file
+        end)
+        vim.fn.filereadable = stub.new().returns(1)
+        vim.fn.isdirectory = stub.new().returns(0)
+        vim.fs.find = stub.new().returns({ temp_gpr })
+        rawset(vim.json, "decode", function()
+          return { projectFile = temp_gpr }
+        end)
+
+        local orig_decode = project.decode_json_config
+        project.decode_json_config = function()
+          return orig_decode(temp_cfg)
+        end
+
+        project.setup()
+
+        assert.stub(vim.api.nvim_set_current_dir).was_not_called()
+        assert
+          .stub(mock_client.notify)
+          .was_not_called_with("workspace/didChangeWorkspaceFolders")
+
+        cleanup_cfg()
+        cleanup_gpr()
+      end
+    )
+
+    it(
+      "saves recomputed scenario variables back to the loaded config path",
+      function()
+        local mock_client =
+          common.create_lsp_client({ root_dir = "/project/root" })
+        common.setup_lsp_client(mock_client)
+
+        local temp_dir = os.tmpname()
+        os.remove(temp_dir)
+        os.execute('mkdir -p "' .. temp_dir .. '/nested"')
+
+        local root_gpr = temp_dir .. "/root.gpr"
+        local root_gpr_file = io.open(root_gpr, "w")
+        assert.is_not_nil(root_gpr_file)
+        root_gpr_file:write("project Root is\nend Root;\n")
+        root_gpr_file:close()
+
+        local temp_gpr = temp_dir .. "/nested/test.gpr"
+        local gpr_file = io.open(temp_gpr, "w")
+        assert.is_not_nil(gpr_file)
+        gpr_file:write('Mode : String := external("MODE", "debug");\n')
+        gpr_file:close()
+
+        local temp_cfg = temp_dir .. "/.als.json"
+        local cfg_file = io.open(temp_cfg, "w")
+        assert.is_not_nil(cfg_file)
+        cfg_file:write('{"projectFile":"nested/test.gpr"}')
+        cfg_file:close()
+
+        rawset(vim.fs, "joinpath", function(dir, file)
+          return dir .. "/" .. file
+        end)
+        rawset(vim.fs, "abspath", function(path)
+          if path:match("^/") then
+            return path
+          end
+          return "/absolute" .. path
+        end)
+        vim.fn.filereadable = stub.new().returns(1)
+        vim.fn.isdirectory = stub.new().returns(0)
+        vim.fs.find = stub.new().returns({ root_gpr })
+        rawset(vim.json, "decode", function()
+          return { projectFile = "nested/test.gpr" }
+        end)
+
+        package.preload["ada_ls.lsp_cmd"] = function()
+          return {
+            get_prj_dependencies = function()
+              return nil
+            end,
+          }
+        end
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        local orig_decode = project.decode_json_config
+        project.decode_json_config = function()
+          return orig_decode(temp_cfg)
+        end
+
+        project.setup()
+
+        local file = io.open(temp_cfg, "r")
+        assert.is_not_nil(file)
+        if file then
+          local content = file:read("*a")
+          file:close()
+          assert.matches('"projectFile":"nested/test.gpr"', content)
+          assert.matches('"scenarioVariables":%{"MODE":"debug"%}', content)
+        end
+
+        local nested_cfg = io.open(temp_dir .. "/nested/.als.json", "r")
+        assert.is_nil(nested_cfg)
+
+        os.remove(temp_cfg)
+        os.remove(temp_gpr)
+        os.remove(root_gpr)
+        os.execute("rm -rf " .. temp_dir)
+      end
+    )
+
+    it(
+      "preserves extra config keys when recomputing missing scenario variables",
+      function()
+        local mock_client =
+          common.create_lsp_client({ root_dir = "/project/root" })
+        common.setup_lsp_client(mock_client)
+
+        local temp_dir = os.tmpname()
+        os.remove(temp_dir)
+        os.execute('mkdir -p "' .. temp_dir .. '/nested"')
+
+        local root_gpr = temp_dir .. "/root.gpr"
+        local root_gpr_file = io.open(root_gpr, "w")
+        assert.is_not_nil(root_gpr_file)
+        root_gpr_file:write("project Root is\nend Root;\n")
+        root_gpr_file:close()
+
+        local temp_gpr = temp_dir .. "/nested/test.gpr"
+        local gpr_file = io.open(temp_gpr, "w")
+        assert.is_not_nil(gpr_file)
+        gpr_file:write('Mode : String := external("MODE", "debug");\n')
+        gpr_file:close()
+
+        local temp_cfg = temp_dir .. "/.als.json"
+        local cfg_file = io.open(temp_cfg, "w")
+        assert.is_not_nil(cfg_file)
+        local config_json = table.concat({
+          '{"projectFile":"nested/test.gpr"',
+          '"defaultCharset":"UTF-8"',
+          '"rootDir":"/workspace/root"',
+          '"relocateBuildTree":"/workspace/build"}',
+        }, ",")
+        cfg_file:write(config_json)
+        cfg_file:close()
+
+        rawset(vim.fs, "joinpath", function(dir, file)
+          return dir .. "/" .. file
+        end)
+        rawset(vim.fs, "abspath", function(path)
+          if path:match("^/") then
+            return path
+          end
+          return "/absolute" .. path
+        end)
+        vim.fn.filereadable = stub.new().returns(1)
+        vim.fn.isdirectory = stub.new().returns(0)
+        vim.fs.find = stub.new().returns({ root_gpr })
+        rawset(vim.json, "decode", function()
+          return {
+            projectFile = "nested/test.gpr",
+            defaultCharset = "UTF-8",
+            rootDir = "/workspace/root",
+            relocateBuildTree = "/workspace/build",
+          }
+        end)
+
+        package.preload["ada_ls.lsp_cmd"] = function()
+          return {
+            get_prj_dependencies = function()
+              return nil
+            end,
+          }
+        end
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        local orig_decode = project.decode_json_config
+        project.decode_json_config = function()
+          return orig_decode(temp_cfg)
+        end
+
+        project.setup()
+
+        local file = io.open(temp_cfg, "r")
+        assert.is_not_nil(file)
+        if file then
+          local content = file:read("*a")
+          file:close()
+          assert.matches('"projectFile":"nested/test.gpr"', content)
+          assert.matches('"scenarioVariables":%{"MODE":"debug"%}', content)
+          assert.matches('"defaultCharset":"UTF%-8"', content)
+          assert.matches('"rootDir":"/workspace/root"', content)
+          assert.matches('"relocateBuildTree":"/workspace/build"', content)
+        end
+
+        os.remove(temp_cfg)
+        os.remove(temp_gpr)
+        os.remove(root_gpr)
+        os.execute("rm -rf " .. temp_dir)
+      end
+    )
+
+    it(
+      "notifies ALS before recomputing inherited scenario variables during setup",
+      function()
+        local temp_dir = os.tmpname()
+        os.remove(temp_dir)
+        os.execute('mkdir -p "' .. temp_dir .. '/dep"')
+
+        local root_gpr = temp_dir .. "/root.gpr"
+        local root_gpr_file = io.open(root_gpr, "w")
+        assert.is_not_nil(root_gpr_file)
+        root_gpr_file:write("project Root is\nend Root;\n")
+        root_gpr_file:close()
+
+        local selected_gpr = temp_dir .. "/target.gpr"
+        local selected_file = io.open(selected_gpr, "w")
+        assert.is_not_nil(selected_file)
+        selected_file:write("project Target is\nend Target;\n")
+        selected_file:close()
+
+        local dep_gpr = temp_dir .. "/dep/inherited.gpr"
+        local dep_file = io.open(dep_gpr, "w")
+        assert.is_not_nil(dep_file)
+        dep_file:write('Mode : String := external("MODE", "release");\n')
+        dep_file:close()
+
+        local temp_cfg = temp_dir .. "/.als.json"
+        local cfg_file = io.open(temp_cfg, "w")
+        assert.is_not_nil(cfg_file)
+        cfg_file:write('{"projectFile":"target.gpr"}')
+        cfg_file:close()
+
+        rawset(vim.fs, "joinpath", function(dir, file)
+          return dir .. "/" .. file
+        end)
+        rawset(vim.fs, "abspath", function(path)
+          if path:match("^/") then
+            return path
+          end
+          return "/absolute" .. path
+        end)
+        vim.fn.filereadable = stub.new().returns(1)
+        vim.fn.isdirectory = stub.new().returns(0)
+        vim.fs.find = stub.new().returns({ root_gpr })
+        rawset(vim.json, "decode", function()
+          return { projectFile = "target.gpr" }
+        end)
+
+        local current_project
+        local config_notifications = {}
+        local mock_client = common.create_lsp_client({ root_dir = temp_dir })
+        mock_client.notify = function(_, method, params)
+          if
+            method == "workspace/didChangeConfiguration"
+            and params
+            and params.settings
+            and params.settings.ada
+          then
+            current_project = params.settings.ada.projectFile
+            table.insert(
+              config_notifications,
+              vim.deepcopy(params.settings.ada)
+            )
+          end
+          return true
+        end
+        common.setup_lsp_client(mock_client)
+
+        package.preload["ada_ls.lsp_cmd"] = function()
+          return {
+            get_prj_dependencies = function(prj_file)
+              if
+                prj_file == selected_gpr and current_project == selected_gpr
+              then
+                return { { uri = "file://" .. dep_gpr } }
+              end
+              return nil
+            end,
+          }
+        end
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        local orig_decode = project.decode_json_config
+        project.decode_json_config = function()
+          return orig_decode(temp_cfg)
+        end
+
+        project.setup()
+
+        assert.equals(selected_gpr, project.project_file)
+        assert.equals("release", project.scenario_variables.MODE)
+        assert.equals(2, #config_notifications)
+        assert.equals(selected_gpr, config_notifications[1].projectFile)
+        assert.is_nil(config_notifications[1].scenarioVariables)
+        assert.same(
+          { MODE = "release" },
+          config_notifications[2].scenarioVariables
+        )
+
+        local file = io.open(temp_cfg, "r")
+        assert.is_not_nil(file)
+        if file then
+          local content = file:read("*a")
+          file:close()
+          assert.matches('"scenarioVariables":%{"MODE":"release"%}', content)
+        end
+
+        os.remove(temp_cfg)
+        os.remove(selected_gpr)
+        os.remove(root_gpr)
+        os.execute("rm -rf " .. temp_dir)
+      end
+    )
 
     it("notifies error when config decode fails", function()
       local mock_client =
@@ -679,7 +1135,7 @@ describe("ada_ls.project", function()
         common.cleanup_packages()
       end)
 
-      it("writes config to .als.json file", function()
+      it("writes projectFile relative to the config directory", function()
         local temp_dir = os.tmpname()
         os.remove(temp_dir)
         os.execute("mkdir -p " .. temp_dir)
@@ -688,8 +1144,9 @@ describe("ada_ls.project", function()
           return dir .. "/" .. file
         end)
 
-        project.project_file = "/project/test.gpr"
+        project.project_file = temp_dir .. "/nested/test.gpr"
         local config = { projectFile = "/project/test.gpr" }
+        os.execute('mkdir -p "' .. temp_dir .. '/nested"')
         project._save_new_configuration(temp_dir, config)
 
         -- Verify file was created
@@ -698,11 +1155,42 @@ describe("ada_ls.project", function()
         if file then
           local content = file:read("*a")
           file:close()
-          assert.matches("projectFile", content)
+          assert.matches('"projectFile":"nested/test.gpr"', content)
         end
 
         os.execute("rm -rf " .. temp_dir)
       end)
+
+      it(
+        "keeps absolute projectFile when project is outside config directory",
+        function()
+          local temp_dir = os.tmpname()
+          os.remove(temp_dir)
+          os.execute("mkdir -p " .. temp_dir)
+
+          rawset(vim.fs, "joinpath", function(dir, file)
+            return dir .. "/" .. file
+          end)
+
+          project.project_file = "/external/project/test.gpr"
+          project._save_new_configuration(temp_dir, {
+            projectFile = "/external/project/test.gpr",
+          })
+
+          local file = io.open(temp_dir .. "/.als.json", "r")
+          assert.is_not_nil(file)
+          if file then
+            local content = file:read("*a")
+            file:close()
+            assert.matches(
+              '"projectFile":"/external/project/test.gpr"',
+              content
+            )
+          end
+
+          os.execute("rm -rf " .. temp_dir)
+        end
+      )
 
       it("notifies error when file cannot be opened", function()
         rawset(vim.fs, "joinpath", function(_, _)
@@ -738,6 +1226,35 @@ describe("ada_ls.project", function()
         project._save_config()
 
         assert.is_true(common.find_stub_call(vim.notify, "No Ada project file"))
+      end)
+
+      it("writes to the provided config path when supplied", function()
+        local temp_dir = os.tmpname()
+        os.remove(temp_dir)
+        os.execute('mkdir -p "' .. temp_dir .. '/nested"')
+
+        rawset(vim.fs, "joinpath", function(dir, file)
+          return dir .. "/" .. file
+        end)
+
+        project.project_file = temp_dir .. "/nested/test.gpr"
+        project._save_config(
+          { projectFile = project.project_file },
+          temp_dir .. "/.als.json"
+        )
+
+        local root_cfg = io.open(temp_dir .. "/.als.json", "r")
+        assert.is_not_nil(root_cfg)
+        if root_cfg then
+          local content = root_cfg:read("*a")
+          root_cfg:close()
+          assert.matches('"projectFile":"nested/test.gpr"', content)
+        end
+
+        local nested_cfg = io.open(temp_dir .. "/nested/.als.json", "r")
+        assert.is_nil(nested_cfg)
+
+        os.execute("rm -rf " .. temp_dir)
       end)
     end)
 

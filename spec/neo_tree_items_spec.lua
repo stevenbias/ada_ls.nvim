@@ -477,6 +477,8 @@ if os.getenv("ADA_LS_TEST_MODE") then
 
         local node = items._create_file_node(source, project)
 
+        node = items._decorate_for_neo_tree({ node })[1]
+
         assert.equals("file", node.type)
         assert.equals("main.adb", node.name)
         assert.equals("/src/main.adb", node.path)
@@ -493,6 +495,7 @@ if os.getenv("ADA_LS_TEST_MODE") then
         local project = { id = "proj_1" }
 
         local node = items._create_file_node(source, project)
+        node = items._decorate_for_neo_tree({ node })[1]
 
         assert.equals("ads", node.ext)
       end)
@@ -529,6 +532,7 @@ if os.getenv("ADA_LS_TEST_MODE") then
           id = "proj_1",
           name = "test_project",
         })
+        node = items._decorate_for_neo_tree({ node })[1]
 
         assert.equals("directory", node.type)
         assert.equals("obj (obj)", node.name)

@@ -44,14 +44,7 @@ local has_devicons, devicons = pcall(require, "nvim-web-devicons")
 ---@field project_id? string Associated project ID
 ---@field children? TreeNode[] Child nodes (when expanded)
 
---- Generate a unique node ID
----@param type string
----@param path string
----@param project_id? string
----@return string
-local function make_node_id(type, path, project_id)
-  return string.format("%s:%s:%s", type, project_id or "", path)
-end
+local make_node_id = node_utils.make_node_id
 
 --- Check if a node is expanded
 ---@param id string
@@ -106,9 +99,6 @@ local function get_node_icon(node)
   return " ", nil
 end
 
-local group_sources_by_dir = node_utils.group_sources_by_dir
-local get_directory_files = node_utils.get_directory_files
-
 --- Build tree nodes from project data
 ---@param data table ProjectViewData
 ---@param opts { flat_mode: boolean, show_object_dirs: boolean, show_runtime: boolean }
@@ -117,186 +107,34 @@ local get_directory_files = node_utils.get_directory_files
 local function build_tree(data, opts, include_collapsed_files)
   include_collapsed_files = include_collapsed_files == true
   local nodes = {}
-  local visited_projects = {}
+  local hierarchy = node_utils.build_hierarchy(data, opts)
 
-  --- Build nodes for a project entry
-  ---@param entry table ProjectEntry
-  ---@param depth number
-  ---@param is_root boolean
-  local function build_project_nodes(entry, depth, is_root)
-    local project = entry.project
-    if visited_projects[project.id] then
-      return
-    end
-    visited_projects[project.id] = true
+  local function flatten(branches, depth)
+    for _, node in ipairs(branches) do
+      local flat_node = {
+        id = node.id,
+        type = node.type,
+        name = node.name,
+        path = node.path,
+        depth = depth,
+        expandable = node.type ~= "file",
+        project_id = node.project_id,
+        is_root = node.is_root,
+        children = node.children,
+        extra = node.extra,
+      }
+      table.insert(nodes, flat_node)
 
-    local project_id = make_node_id("project", project.file_name, project.id)
-
-    local project_node = {
-      id = project_id,
-      type = "project",
-      name = project.name .. (is_root and " (Root)" or ""),
-      path = project.file_name,
-      depth = depth,
-      expandable = true,
-      project_id = project.id,
-      is_root = is_root,
-    }
-    table.insert(nodes, project_node)
-
-    if is_expanded(project_id) or include_collapsed_files then
-      -- Group sources by directory
-      local dirs, dir_list = group_sources_by_dir(entry.sources)
-
-      -- Add directory nodes
-      for _, dir in ipairs(dir_list) do
-        local dir_id = make_node_id("directory", dir, project.id)
-        local dir_name =
-          require("ada_ls.utils").get_relative_path(dir, project.directory)
-
-        local dir_node = {
-          id = dir_id,
-          type = "directory",
-          name = dir_name,
-          path = dir,
-          depth = depth + 1,
-          expandable = true,
-          project_id = project.id,
-        }
-        table.insert(nodes, dir_node)
-
-        if is_expanded(dir_id) or include_collapsed_files then
-          -- Sort files
-          local files = dirs[dir]
-          node_utils.sort_sources_by_simple_name(files)
-
-          for _, source in ipairs(files) do
-            local file_id = make_node_id("file", source.file_name, project.id)
-            table.insert(nodes, {
-              id = file_id,
-              type = "file",
-              name = source.simple_name,
-              path = source.file_name,
-              depth = depth + 2,
-              expandable = false,
-              project_id = project.id,
-            })
-          end
-        end
-      end
-
-      -- Add object directory if enabled
-      if opts.show_object_dirs and project.object_dir then
-        local obj_id =
-          make_node_id("object_dir", project.object_dir, project.id)
-        table.insert(nodes, {
-          id = obj_id,
-          type = "object_dir",
-          name = require("ada_ls.utils").safe_basename(project.object_dir)
-            .. " (obj)",
-          path = project.object_dir,
-          depth = depth + 1,
-          expandable = true,
-          project_id = project.id,
-        })
-
-        if is_expanded(obj_id) or include_collapsed_files then
-          for _, file_name in ipairs(get_directory_files(project.object_dir)) do
-            local file_path = vim.fs.joinpath(project.object_dir, file_name)
-            table.insert(nodes, {
-              id = make_node_id("file", file_path, project.id),
-              type = "file",
-              name = file_name,
-              path = file_path,
-              depth = depth + 2,
-              expandable = false,
-              project_id = project.id,
-            })
-          end
-        end
-      end
-
-      -- Add sub-projects if not in flat mode
-      if not opts.flat_mode then
-        for _, sub_entry in
-          ipairs(node_utils.collect_subproject_entries(entry, data))
-        do
-          if sub_entry then
-            build_project_nodes(sub_entry, depth + 1, false)
-          end
-        end
+      if
+        flat_node.expandable
+        and (is_expanded(flat_node.id) or include_collapsed_files)
+      then
+        flatten(node.children, depth + 1)
       end
     end
   end
 
-  if opts.flat_mode then
-    -- Flat mode: show all projects at root level
-    for _, entry in ipairs(node_utils.list_projects_flat(data)) do
-      local is_root = entry.project.id == data.root_project_id
-      build_project_nodes(entry, 0, is_root)
-    end
-  else
-    -- Hierarchical mode: start from root project
-    local root_entry = data.projects[data.root_project_id]
-    if root_entry then
-      build_project_nodes(root_entry, 0, true)
-    end
-  end
-
-  -- Add runtime project if enabled
-  if opts.show_runtime and data.runtime_project then
-    local runtime = data.runtime_project
-    local runtime_id = make_node_id("runtime", "runtime", "runtime")
-
-    table.insert(nodes, {
-      id = runtime_id,
-      type = "runtime",
-      name = "Runtime",
-      depth = 0,
-      expandable = true,
-      project_id = "runtime",
-    })
-
-    if is_expanded(runtime_id) or include_collapsed_files then
-      -- Group runtime sources by directory
-      local dirs, dir_list = group_sources_by_dir(runtime.sources)
-
-      for _, dir in ipairs(dir_list) do
-        local dir_id = make_node_id("directory", dir, "runtime")
-        local runtime_dir = runtime.project and runtime.project.directory or ""
-        local dir_name =
-          require("ada_ls.utils").get_relative_path(dir, runtime_dir)
-
-        table.insert(nodes, {
-          id = dir_id,
-          type = "directory",
-          name = dir_name,
-          path = dir,
-          depth = 1,
-          expandable = true,
-          project_id = "runtime",
-        })
-
-        if is_expanded(dir_id) or include_collapsed_files then
-          local files = dirs[dir]
-          node_utils.sort_sources_by_simple_name(files)
-
-          for _, source in ipairs(files) do
-            local file_id = make_node_id("file", source.file_name, "runtime")
-            table.insert(nodes, {
-              id = file_id,
-              type = "file",
-              name = source.simple_name,
-              path = source.file_name,
-              depth = 2,
-              expandable = false,
-              project_id = "runtime",
-            })
-          end
-        end
-      end
-    end
-  end
+  flatten(hierarchy, 0)
 
   return nodes
 end
@@ -818,8 +656,8 @@ if os.getenv("ADA_LS_TEST_MODE") then
   M._build_tree = build_tree
   M._filter_nodes = filter_nodes
   M._make_node_id = make_node_id
-  M._group_sources_by_dir = group_sources_by_dir
-  M._get_directory_files = get_directory_files
+  M._group_sources_by_dir = node_utils.group_sources_by_dir
+  M._get_directory_files = node_utils.get_directory_files
   M._build_tree_prefix = build_tree_prefix
   M._tree_chars = tree_chars
   M._toggle_expanded = toggle_expanded
