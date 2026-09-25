@@ -38,20 +38,31 @@ function M.get_bufdir()
   return vim.fs.dirname(M.get_bufpath())
 end
 
+local function get_als_clients(opts)
+  opts = opts or {}
+  local client_names = { "ada_ls", "gpr_ls" }
+
+  for _, name in ipairs(client_names) do
+    local query = { name = name }
+    if opts.bufnr ~= nil then
+      query.bufnr = opts.bufnr
+    end
+
+    local clients = vim.lsp.get_clients(query)
+    if clients and #clients > 0 then
+      return clients, name
+    end
+  end
+
+  return nil, nil
+end
+
 function M.get_ada_ls()
   local bufid = M.get_bufid()
-  local ls_name = "ada_ls"
+  local clients = get_als_clients({ bufnr = bufid })
 
-  local clients = vim.lsp.get_clients({ bufnr = bufid, name = ls_name })
-
-  if not clients or #clients == 0 then
-    -- check if there is an ada language client configured for gpr
-    ls_name = "gpr_ls"
-    clients = vim.lsp.get_clients({ bufnr = bufid, name = ls_name })
-
-    if not clients or #clients == 0 then
-      return nil, "Ada LSP client not found"
-    end
+  if not clients then
+    return nil, "Ada LSP client not found"
   end
 
   M.als = clients[1]
@@ -60,20 +71,14 @@ end
 
 local function get_active_ada_client_name()
   local bufid = M.get_bufid()
-  local client_names = { "ada_ls", "gpr_ls" }
-
-  for _, name in ipairs(client_names) do
-    local clients = vim.lsp.get_clients({ bufnr = bufid, name = name })
-    if clients and #clients > 0 then
-      return name
-    end
+  local _, name = get_als_clients({ bufnr = bufid })
+  if name then
+    return name
   end
 
-  for _, name in ipairs(client_names) do
-    local clients = vim.lsp.get_clients({ name = name })
-    if clients and #clients > 0 then
-      return name
-    end
+  _, name = get_als_clients()
+  if name then
+    return name
   end
 
   return "ada_ls"
@@ -228,6 +233,7 @@ end
 -- Test-specific exports - only exposed in test mode
 if os.getenv("ADA_LS_TEST_MODE") then
   M._log_lvl_tostring = log_lvl_tostring
+  M._get_ada_clients = get_als_clients
 end
 
 return M

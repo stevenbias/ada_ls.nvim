@@ -53,6 +53,48 @@ describe("ada_ls.utils", function()
       assert.is_nil(client)
       assert.equals("Ada LSP client not found", err)
     end)
+
+    it("returns nil when current buffer has no Ada client", function()
+      local mock_client = common.create_lsp_client()
+      vim.lsp.get_clients = function(opts)
+        if opts and opts.bufnr then
+          return {}
+        end
+        if opts and opts.name == "ada_ls" then
+          return { mock_client }
+        end
+        return {}
+      end
+
+      local client, err = utils.get_ada_ls()
+
+      assert.is_nil(client)
+      assert.equals("Ada LSP client not found", err)
+    end)
+
+    it(
+      "does not fall back to global gpr_ls when buffer has no client",
+      function()
+        local mock_client = common.create_lsp_client({ name = "gpr_ls" })
+        vim.lsp.get_clients = function(opts)
+          if opts and opts.bufnr then
+            return {}
+          end
+          if opts and opts.name == "ada_ls" then
+            return {}
+          end
+          if opts and opts.name == "gpr_ls" then
+            return { mock_client }
+          end
+          return {}
+        end
+
+        local client, err = utils.get_ada_ls()
+
+        assert.is_nil(client)
+        assert.equals("Ada LSP client not found", err)
+      end
+    )
   end)
 
   describe("clear", function()
