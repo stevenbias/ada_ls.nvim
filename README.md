@@ -84,6 +84,7 @@ If Telescope is installed, `:Als pick_gpr` uses a Telescope picker. Otherwise it
 | `:Als clean` | Clean build artifacts with gprclean |
 | `:Als config` | Edit project configuration (.als.json) |
 | `:Als edit_gpr` | Open project file |
+| `:Als format` | Format the current buffer via Neovim LSP formatting |
 | `:Als other` | Go to corresponding .ads/.adb file |
 | `:Als pick_gpr` | Select GPR file via Telescope picker or `vim.ui.select()` fallback |
 
@@ -129,8 +130,9 @@ vim.keymap.set("n", "<leader>aj", "<cmd>Als config<cr>", { desc = "Als JSON conf
 vim.keymap.set("n", "<leader>ap", "<cmd>Als edit_gpr<cr>", { desc = "Als edit Project file" })
 vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick Gpr" })
 vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als Other file" })
+vim.keymap.set("n", "<leader>af", "<cmd>Als format<cr>", { desc = "Als Format" })
 vim.keymap.set("n", "<leader>av", "<cmd>Als project_view<cr>", { desc = "Als project View" })
-vim.keymap.set("n", "<leader>af", "<cmd>Als project_files<cr>", { desc = "Als project Files" })
+vim.keymap.set("n", "<leader>al", "<cmd>Als project_files<cr>", { desc = "Als List project files" })
 ```
 #### Spark keymaps
 ```lua

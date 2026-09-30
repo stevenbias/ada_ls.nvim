@@ -183,6 +183,26 @@ describe("plugin/ada_ls.lua", function()
       assert.stub(go_to_other_stub).was_called()
     end)
 
+    it("formats with ada_ls and gpr_ls clients only", function()
+      local format_stub = stub.new()
+      vim.lsp = {
+        buf = {
+          format = format_stub,
+        },
+      }
+
+      execute_subcommand(commands, "Als", "format")
+
+      assert.stub(format_stub).was_called(1)
+
+      local format_opts = format_stub.calls[1].vals[1]
+      assert.is_table(format_opts)
+      assert.is_function(format_opts.filter)
+      assert.is_true(format_opts.filter({ name = "ada_ls" }))
+      assert.is_true(format_opts.filter({ name = "gpr_ls" }))
+      assert.is_false(format_opts.filter({ name = "lua_ls" }))
+    end)
+
     it("delegates pick_gpr to project.pick_gpr_file", function()
       local pick_gpr_stub = stub.new()
       package.loaded["ada_ls.project"] = {

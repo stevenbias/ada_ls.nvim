@@ -44,6 +44,15 @@ local als_subcmd_tbl = {
       vim.cmd.edit(vim.uri_to_fname(gpr_uri))
     end,
   },
+  format = {
+    impl = function()
+      vim.lsp.buf.format({
+        filter = function(client)
+          return client.name == "ada_ls" or client.name == "gpr_ls"
+        end,
+      })
+    end,
+  },
   other = {
     impl = function()
       require("ada_ls.lsp_cmd").go_to_other()
