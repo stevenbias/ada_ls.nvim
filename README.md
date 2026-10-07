@@ -66,11 +66,19 @@ For plugin managers without automatic `opts` handling, call `require("ada_ls").s
 
 ## Usage
 
+### Minimal ALS Setup
+
+1. Install the plugin and enable it with `opts = {}` or `require("ada_ls").setup()`
+2. Open an Ada file
+3. If no GPR project file is active yet, run `:Als pick_gpr`
+4. Verify the Neovim side with `:Als health` or `:checkhealth ada_ls`
+5. Build the current project with `:Als build`
+
 ### Quick Start
 
 1. Open an Ada file in your project
-2. The plugin auto-detects your project and starts ALS
-3. Select a GPR file if not auto-detected: `:Als pick_gpr`
+2. The plugin configures ALS automatically for Ada buffers
+3. Select a GPR project file if the current project is not active yet: `:Als pick_gpr`
 4. Build your project: `:Als build`
 
 If Telescope is installed, `:Als pick_gpr` uses a Telescope picker. Otherwise it falls back to `vim.ui.select()`.
@@ -83,8 +91,9 @@ If Telescope is installed, `:Als pick_gpr` uses a Telescope picker. Otherwise it
 | `:Als build` | Build project with gprbuild |
 | `:Als clean` | Clean build artifacts with gprclean |
 | `:Als config` | Edit project configuration (.als.json) |
-| `:Als edit_gpr` | Open project file |
+| `:Als edit_gpr` | Open the active GPR project file |
 | `:Als format` | Format the current buffer via Neovim LSP formatting |
+| `:Als health` | Open `:checkhealth ada_ls` |
 | `:Als other` | Go to corresponding .ads/.adb file |
 | `:Als pick_gpr` | Select GPR file via Telescope picker or `vim.ui.select()` fallback |
 

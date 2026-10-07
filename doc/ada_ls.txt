@@ -124,11 +124,29 @@ configuration: >lua
 The plugin automatically configures ALS when you open an Ada or GPR file. No
 manual LSP configuration is needed.
 
+Minimal ALS setup: ~
+
+1. Install the plugin and enable it with `opts = {}` or
+   `require("ada_ls").setup()`
+2. Open an Ada file
+3. If no GPR project file is active yet, run: >
+       :Als pick_gpr
+<
+4. Verify the Neovim side with: >
+       :Als health
+<
+   or: >
+       :checkhealth ada_ls
+<
+5. Build the current project with: >
+       :Als build
+<
+
 Quick start: ~
 
 1. Open an Ada file in your project
-2. The plugin auto-detects your project and starts ALS
-3. Select a GPR file if not auto-detected: >
+2. The plugin configures ALS automatically for Ada buffers
+3. Select a GPR project file if the current project is not active yet: >
        :Als pick_gpr
 <
 4. Build your project: >
@@ -178,7 +196,8 @@ COMMANDS                                                  *ada_ls-commands*
 
 :Als                                                          *:Als*
     Main command for Ada Language Server integration. Provides
-    subcommands for project management and building.
+    subcommands for project management and building. When called without
+    arguments, it shows a short onboarding summary.
 
 :Als build                                                       *:Als-build*
     Build the project using gprbuild. Uses the current GPR file
@@ -192,12 +211,16 @@ COMMANDS                                                  *ada_ls-commands*
     Open the project configuration file (.als.json) for editing.
 
 :Als edit_gpr                                               *:Als-edit_gpr*
-    Open the current GPR project file for editing.
+    Open the active GPR project file for editing.
 
 :Als format                                                 *:Als-format*
     Format the current buffer using vim.lsp.buf.format().
     Requires an attached LSP client with document-formatting
     support.
+
+:Als health                                                   *:Als-health*
+    Open the full health report via `:checkhealth ada_ls`, then show a
+    short onboarding summary.
 
 :Als other                                                       *:Als-other*
     Jump to the corresponding .ads or .adb file using LSP
@@ -458,6 +481,7 @@ Verify your installation and configuration: >
 
 This will check:
 - Neovim version compatibility (>= 0.11)
+- Ada Language Server executable availability
 - External tools (gprbuild, gprclean, gnatprove)
 - Ada Language Server status
 - Configuration validity

@@ -4,6 +4,7 @@
 :Als-config	ada_ls.txt	/*:Als-config*
 :Als-edit_gpr	ada_ls.txt	/*:Als-edit_gpr*
 :Als-format	ada_ls.txt	/*:Als-format*
+:Als-health	ada_ls.txt	/*:Als-health*
 :Als-other	ada_ls.txt	/*:Als-other*
 :Als-pick_gpr	ada_ls.txt	/*:Als-pick_gpr*
 :Als-project_files	ada_ls.txt	/*:Als-project_files*
