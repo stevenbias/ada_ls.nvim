@@ -70,7 +70,6 @@ local als_subcmd_tbl = {
   health = {
     impl = function()
       vim.cmd("checkhealth ada_ls")
-      vim.schedule(show_als_summary)
     end,
   },
   other = {
