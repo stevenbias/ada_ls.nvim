@@ -22,7 +22,10 @@ local function execute_subcommand(commands, cmd_name, subcmd, extra_args)
   local entry = commands[cmd_name]
   assert.is_not_nil(entry)
 
-  local fargs = { subcmd }
+  local fargs = {}
+  if subcmd ~= nil then
+    table.insert(fargs, subcmd)
+  end
   for _, arg in ipairs(extra_args or {}) do
     table.insert(fargs, arg)
   end
@@ -49,7 +52,7 @@ describe("plugin/ada_ls.lua", function()
 
       assert.is_not_nil(commands.Als)
       assert.is_not_nil(commands.Spark)
-      assert.equals("+", commands.Als.opts.nargs)
+      assert.equals("*", commands.Als.opts.nargs)
       assert.equals("+", commands.Spark.opts.nargs)
       assert.is_true(commands.Als.opts.bang)
       assert.is_true(commands.Spark.opts.bang)
@@ -80,6 +83,22 @@ describe("plugin/ada_ls.lua", function()
       assert.equals(2, #vim.cmd.calls)
       assert.equals("cclose", vim.cmd.calls[1].vals[1])
       assert.equals("make", vim.cmd.calls[2].vals[1])
+    end)
+
+    it("shows summary for bare :Als", function()
+      vim.notify = stub.new()
+
+      execute_subcommand(commands, "Als")
+
+      assert.stub(vim.notify).was_called(1)
+      local call_args = vim.notify.calls[1].vals
+      assert.matches(
+        "configures Ada Language Server automatically",
+        call_args[1]
+      )
+      assert.matches("select a GPR project file", call_args[1])
+      assert.matches(":Als edit_gpr", call_args[1])
+      assert.equals(vim.log.levels.INFO, call_args[2])
     end)
 
     it("delegates clean to gprtools.clean", function()

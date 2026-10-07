@@ -8,6 +8,20 @@ vim.g.loaded_ada_ls = true
 local als_cmd = "Als"
 local spark_cmd = "Spark"
 
+local function show_als_summary()
+  vim.notify(
+    table.concat({
+      "ada_ls.nvim configures Ada Language Server automatically.",
+      "Use :Als pick_gpr to select a GPR project file if needed.",
+      "Use :Als edit_gpr to open the active GPR project file.",
+      "Use :Als build to build the current project.",
+      "Use :Als other to jump between .ads and .adb.",
+      "Use :checkhealth ada_ls to diagnose setup issues.",
+    }, "\n"),
+    vim.log.levels.INFO
+  )
+end
+
 ---@class MyCmdSubcommand
 ---@field impl fun(args:string[], opts: table) The command implementation
 ---@field complete? fun(subcmd_arg_lead: string): string[] (optional) Command completions callback, taking the lead of the subcommand's arguments
@@ -109,6 +123,10 @@ local spark_subcmd_tbl = {
 local function subcmd(opts)
   local fargs = opts.fargs
   local subcommand_key = fargs[1]
+  if opts.name == als_cmd and not subcommand_key then
+    show_als_summary()
+    return
+  end
   -- Get the subcommand's arguments, if any
   local args = #fargs > 1 and vim.list_slice(fargs, 2, #fargs) or {}
   local subcommand_tbl
@@ -131,7 +149,7 @@ end
 
 local function create_command(cmd_name)
   vim.api.nvim_create_user_command(cmd_name, subcmd, {
-    nargs = "+",
+    nargs = cmd_name == als_cmd and "*" or "+",
     desc = cmd_name .. " commands",
     complete = function(arg_lead, cmdline, _)
       local subcommand_tbl
