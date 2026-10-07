@@ -63,12 +63,7 @@ function M.makeprg_setup(json_config)
   end
 
   local err_format = table.concat({
-    "%f:%l:%c: %t%*[^:]: %m",
-    "%f:%l: %t%*[^:]: %m",
     "%f:%l:%c: %m",
-    "%f:%l: %m",
-    "%*[^:]: %f:%l:%c: %m",
-    "%*[^:]: %f:%l: %m",
     "%-G%.%#",
   }, ",")
 
