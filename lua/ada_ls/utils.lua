@@ -1,5 +1,6 @@
 local M = {
   als = nil,
+  json_file = nil,
   plugin_name = "Ada_ls",
   server_project_name = nil,
 }
@@ -85,7 +86,12 @@ local function get_active_ada_client_name()
 end
 
 function M.get_conf_file()
-  local root_dir = require("ada_ls.lsp_cmd").get_root_dir()
+  local ok, lsp_cmd = pcall(require, "ada_ls.lsp_cmd")
+  if not ok or type(lsp_cmd.get_root_dir) ~= "function" then
+    return nil
+  end
+
+  local root_dir = lsp_cmd.get_root_dir()
   if root_dir == nil then
     return nil
   end
@@ -143,14 +149,26 @@ local function set_server_project_name(params)
   end
 end
 
+local function set_json_file()
+  local conf_file = M.get_conf_file()
+  if conf_file then
+    M.json_file = conf_file
+  end
+end
+
 function M.get_server_project_name()
   return M.server_project_name
+end
+
+function M.get_json_file()
+  return M.json_file
 end
 
 function M.notify_server(method, params)
   local client = M.get_ada_ls()
   if client ~= nil then
     set_server_project_name(params)
+    set_json_file()
     return client:notify(method, params)
   end
   return false
@@ -172,6 +190,7 @@ end
 
 function M.clear()
   M.als = nil
+  M.json_file = nil
   M.server_project_name = nil
 end
 

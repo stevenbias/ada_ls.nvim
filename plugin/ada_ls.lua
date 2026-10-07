@@ -67,6 +67,12 @@ local als_subcmd_tbl = {
       })
     end,
   },
+  health = {
+    impl = function()
+      vim.cmd("checkhealth ada_ls")
+      vim.schedule(show_als_summary)
+    end,
+  },
   other = {
     impl = function()
       require("ada_ls.lsp_cmd").go_to_other()

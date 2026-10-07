@@ -392,6 +392,9 @@ end
 function M.setup_utils_mock(opts)
   opts = opts or {}
   rawset(package.loaded, "ada_ls.utils", {
+    get_json_file = function()
+      return opts.json_file or opts.conf_file
+    end,
     get_conf_file = function()
       return opts.conf_file
     end,

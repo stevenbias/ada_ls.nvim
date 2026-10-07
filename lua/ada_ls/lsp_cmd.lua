@@ -59,7 +59,20 @@ function M.get_root_dir()
   if not client then
     return nil
   end
-  return client.root_dir
+
+  if client.root_dir and client.root_dir ~= "" then
+    return client.root_dir
+  end
+
+  if
+    client.config
+    and client.config.root_dir
+    and client.config.root_dir ~= ""
+  then
+    return client.config.root_dir
+  end
+
+  return nil
 end
 
 function M.get_symbols()

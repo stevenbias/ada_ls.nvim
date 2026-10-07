@@ -1,5 +1,7 @@
 local M = {}
 
+local ALS_EXECUTABLE = "ada_language_server"
+
 local function check_executable(cmd, opts)
   opts = opts or {}
   local found = vim.fn.executable(cmd) == 1
@@ -24,7 +26,7 @@ local function check_executable(cmd, opts)
   end
 end
 
-local function check_lsp_client()
+local function check_lsp_client(als_available)
   local clients = vim.lsp.get_clients({ name = "ada_ls" })
 
   if #clients > 0 then
@@ -35,10 +37,19 @@ local function check_lsp_client()
     )
     return true, client
   else
-    vim.health.error("Ada Language Server not running", {
-      "Configure Ada Language Server first",
-      "See: https://github.com/AdaCore/ada_language_server",
-    })
+    local advice = {
+      "Open an Ada file to start the server",
+      "Run :Als pick_gpr if no project is selected yet",
+      "Run :checkhealth vim.lsp for more LSP details",
+    }
+    if als_available == false then
+      vim.health.warn("Ada Language Server not running", {
+        "Install ada_language_server and ensure it is available in PATH",
+        "Then reopen an Ada file and rerun :checkhealth ada_ls",
+      })
+    else
+      vim.health.error("Ada Language Server not running", advice)
+    end
     return false, nil
   end
 end
@@ -52,10 +63,18 @@ local function check_project_file()
   end
 
   local project_file = nil
-  local conf_file = require("ada_ls.utils").get_conf_file()
+  local utils = require("ada_ls.utils")
+  local conf_file = nil
+
+  if type(utils.get_json_file) == "function" then
+    conf_file = utils.get_json_file()
+  end
+  if not conf_file and type(utils.get_conf_file) == "function" then
+    conf_file = utils.get_conf_file()
+  end
 
   if conf_file then
-    vim.health.ok("Configuration file found (.als.json)")
+    vim.health.ok("Configuration file found (" .. conf_file .. ")")
     project_file = require("ada_ls.project").decode_json_config(conf_file)
     if project_file then
       vim.health.ok(string.format("Project file found (%s)", project_file))
@@ -121,6 +140,13 @@ function M.check()
   end
 
   vim.health.start("ada_ls.nvim: External dependencies")
+  local als_available = check_executable(ALS_EXECUTABLE, {
+    advice = {
+      "Install ada_language_server",
+      "Ensure ada_language_server is available in PATH",
+      "Required for Ada Language Server features and :Als commands",
+    },
+  })
   check_executable("gprbuild", {
     advice = {
       "Install gprbuild (part of GNAT toolchain)",
@@ -142,7 +168,7 @@ function M.check()
   })
 
   vim.health.start("ada_ls.nvim: Ada Language Server")
-  check_lsp_client()
+  check_lsp_client(als_available)
 
   vim.health.start("ada_ls.nvim: Configuration")
   check_config()

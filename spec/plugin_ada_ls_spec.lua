@@ -222,6 +222,21 @@ describe("plugin/ada_ls.lua", function()
       assert.is_false(format_opts.filter({ name = "lua_ls" }))
     end)
 
+    it("opens health for health command", function()
+      local cmd_stub = stub.new()
+      vim.cmd = cmd_stub
+      vim.notify = stub.new()
+      vim.schedule = stub.new().invokes(function(fn)
+        fn()
+      end)
+
+      execute_subcommand(commands, "Als", "health")
+
+      assert.stub(cmd_stub).was_called_with("checkhealth ada_ls")
+      assert.stub(vim.schedule).was_called(1)
+      assert.stub(vim.notify).was_called(1)
+    end)
+
     it("delegates pick_gpr to project.pick_gpr_file", function()
       local pick_gpr_stub = stub.new()
       package.loaded["ada_ls.project"] = {

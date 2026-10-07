@@ -33,6 +33,19 @@ describe("ada_ls.lsp_cmd", function()
       local result = lsp_cmd.get_root_dir()
       assert.equals("/my/project", result)
     end)
+
+    it(
+      "falls back to client.config.root_dir when root_dir is missing",
+      function()
+        local mock_client = common.create_lsp_client()
+        mock_client.root_dir = nil
+        mock_client.config = { root_dir = "/my/config/project" }
+        common.setup_lsp_client(mock_client)
+
+        local result = lsp_cmd.get_root_dir()
+        assert.equals("/my/config/project", result)
+      end
+    )
   end)
 
   describe("get_symbols", function()

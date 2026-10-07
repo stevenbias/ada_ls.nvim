@@ -51,6 +51,12 @@ describe("ada_ls.health", function()
       assert.is_true(#vim.health.start.calls >= 5)
     end)
 
+    it("checks ada_language_server executable", function()
+      health.check()
+
+      assert.stub(vim.fn.executable).was_called_with("ada_language_server")
+    end)
+
     it("reports Neovim >= 0.11 as ok", function()
       vim.fn.has = stub.new().returns(1)
       health.check()
@@ -192,6 +198,17 @@ describe("ada_ls.health", function()
         assert.is_false(ok)
         assert.is_nil(client)
         assert.stub(vim.health.error).was_called()
+      end)
+
+      it("warns instead of errors when executable is unavailable", function()
+        vim.lsp.get_clients = stub.new().returns({})
+
+        local ok, client = health._check_lsp_client(false)
+
+        assert.is_false(ok)
+        assert.is_nil(client)
+        assert.stub(vim.health.warn).was_called()
+        assert.is_false(common.find_stub_call(vim.health.error, "not running"))
       end)
     end)
 
