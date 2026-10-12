@@ -8,6 +8,11 @@ describe("ada_ls.init", function()
   before_each(function()
     common.cleanup_packages()
     common.setup_vim_globals()
+    rawset(vim, "treesitter", {
+      language = {
+        add = stub.new().returns(true),
+      },
+    })
     -- Add mocks for vim.lsp fields used by init.setup()
     vim.lsp.protocol = {
       make_client_capabilities = stub.new().returns({}),
@@ -19,6 +24,8 @@ describe("ada_ls.init", function()
   end)
 
   after_each(function()
+    package.preload["nvim-treesitter"] = nil
+    package.loaded["nvim-treesitter"] = nil
     common.cleanup_packages()
   end)
 
@@ -66,6 +73,38 @@ describe("ada_ls.init", function()
       assert.is_function(config.on_attach)
       assert.is_function(config.root_dir)
     end)
+
+    it("checks whether the Ada treesitter parser is available", function()
+      ada_ls.setup()
+
+      assert.stub(vim.treesitter.language.add).was_called_with("ada")
+    end)
+
+    it("installs the Ada treesitter parser when missing", function()
+      vim.treesitter.language.add = stub.new().returns(false)
+      local install_stub = stub.new()
+      package.preload["nvim-treesitter"] = function()
+        return { install = install_stub }
+      end
+
+      ada_ls.setup()
+
+      assert.stub(install_stub).was_called_with("ada")
+    end)
+
+    it(
+      "warns when the Ada treesitter parser is missing and nvim-treesitter is unavailable",
+      function()
+        vim.treesitter.language.add = stub.new().returns(false)
+
+        ada_ls.setup()
+
+        assert.stub(vim.notify).was_called_with(
+          "Ada LS: nvim-treesitter not found, please install it to enable Ada support",
+          vim.log.levels.WARN
+        )
+      end
+    )
   end)
 
   -- Private function tests - only run in test mode

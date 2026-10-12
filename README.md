@@ -37,6 +37,7 @@ snippets and SPARK formal verification.
   "stevenbias/ada_ls.nvim",
   ft = { "ada", "gpr" },
   dependencies = {
+    "nvim-treesitter/nvim-treesitter",
     "nvim-telescope/telescope.nvim",  -- optional, for GPR file picker
     "nvim-neo-tree/neo-tree.nvim",    -- optional, for project view integration with neo-tree
     "rcarriga/nvim-notify",           -- optional, for notifications
@@ -51,6 +52,7 @@ With `lazy.nvim`, `opts = {}` automatically calls `require("ada_ls").setup({})`.
 ### vim-plug
 
 ```vim
+Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 Plug 'nvim-telescope/telescope.nvim'  " optional
 Plug 'nvim-neo-tree/neo-tree.nvim'    " optional
 Plug 'rcarriga/nvim-notify'           " optional
@@ -63,6 +65,10 @@ EOF
 ```
 
 For plugin managers without automatic `opts` handling, call `require("ada_ls").setup()` manually.
+
+During `setup()`, `ada_ls.nvim` checks whether the Ada Tree-sitter parser is
+available. If it is missing and `nvim-treesitter` is installed, the plugin
+automatically runs `require("nvim-treesitter").install("ada")`.
 
 ## Usage
 
@@ -167,9 +173,12 @@ The plugin provides support for GPR project files (`.gpr`):
 
 - `.gpr` files are registered as the `gpr` filetype automatically
 - Treesitter highlighting using the Ada parser
+- Missing Ada parser is installed automatically through `nvim-treesitter`
+  during `setup()`
 - A dedicated LSP instance is started with `ada_language_server --language-gpr`
 
-No additional configuration is required.
+No additional configuration is required beyond having `nvim-treesitter`
+installed.
 
 ## Project Configuration File
 

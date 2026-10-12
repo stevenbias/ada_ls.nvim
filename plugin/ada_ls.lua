@@ -11,12 +11,13 @@ local spark_cmd = "Spark"
 local function show_als_summary()
   vim.notify(
     table.concat({
-      "ada_ls.nvim configures Ada Language Server automatically.",
-      "Use `:Als pick_gpr` to select a GPR project file if needed.",
-      "Use `:Als edit_gpr` to open the active GPR project file.",
-      "Use `:Als build` to build the current project.",
-      "Use `:Als other` to jump between .ads and .adb.",
-      "Use `:checkhealth ada_ls` to diagnose setup issues.",
+      "ada_ls.nvim configures the Ada Language Server automatically\n",
+      "Use `:Als pick_gpr` to select a GPR project file if needed",
+      "Use `:Als edit_gpr` to open the active GPR project file",
+      "Use `:Als config` to open the .als.json config file",
+      "Use `:Als build` to build the current project",
+      "Use `:Als other` to jump between .ads and .adb",
+      "Use `:Als health` to diagnose setup issues",
     }, "\n"),
     vim.log.levels.INFO
   )

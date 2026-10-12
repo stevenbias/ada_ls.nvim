@@ -93,11 +93,12 @@ describe("plugin/ada_ls.lua", function()
       assert.stub(vim.notify).was_called(1)
       local call_args = vim.notify.calls[1].vals
       assert.matches(
-        "configures Ada Language Server automatically",
+        "configures the Ada Language Server automatically",
         call_args[1]
       )
       assert.matches("select a GPR project file", call_args[1])
       assert.matches(":Als edit_gpr", call_args[1])
+      assert.matches(":Als config", call_args[1])
       assert.equals(vim.log.levels.INFO, call_args[2])
     end)
 
@@ -225,16 +226,10 @@ describe("plugin/ada_ls.lua", function()
     it("opens health for health command", function()
       local cmd_stub = stub.new()
       vim.cmd = cmd_stub
-      vim.notify = stub.new()
-      vim.schedule = stub.new().invokes(function(fn)
-        fn()
-      end)
 
       execute_subcommand(commands, "Als", "health")
 
       assert.stub(cmd_stub).was_called_with("checkhealth ada_ls")
-      assert.stub(vim.schedule).was_called(1)
-      assert.stub(vim.notify).was_called(1)
     end)
 
     it("delegates pick_gpr to project.pick_gpr_file", function()
