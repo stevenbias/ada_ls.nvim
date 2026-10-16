@@ -57,6 +57,12 @@ describe("ada_ls.health", function()
       assert.stub(vim.fn.executable).was_called_with("ada_language_server")
     end)
 
+    it("checks tree-sitter executable", function()
+      health.check()
+
+      assert.stub(vim.fn.executable).was_called_with("tree-sitter")
+    end)
+
     it("reports Neovim >= 0.11 as ok", function()
       vim.fn.has = stub.new().returns(1)
       health.check()
@@ -141,6 +147,22 @@ describe("ada_ls.health", function()
           assert.matches("gnatprove", call_args[1])
         end
       )
+
+      it("uses provided advice for optional executables", function()
+        vim.fn.executable = stub.new().returns(0)
+
+        health._check_executable("tree-sitter", {
+          optional = true,
+          advice = {
+            "Install the tree-sitter CLI and ensure `tree-sitter` is available in PATH",
+          },
+        })
+
+        local call_args = vim.health.warn.calls[1]
+        local advice = call_args.vals[2]
+        assert.is_table(advice)
+        assert.matches("tree%-sitter CLI", advice[1])
+      end)
 
       it("uses custom version_arg when provided", function()
         vim.fn.executable = stub.new().returns(1)

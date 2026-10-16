@@ -166,6 +166,14 @@ function M.check()
       "Required for :Spark prove commands",
     },
   })
+  check_executable("tree-sitter", {
+    optional = true,
+    advice = {
+      "Install the tree-sitter CLI and ensure `tree-sitter` is available in PATH",
+      "Required by nvim-treesitter to build the Ada parser automatically",
+      "Needed for GPR Tree-sitter highlighting when the Ada parser is missing",
+    },
+  })
 
   vim.health.start("ada_ls.nvim: Ada Language Server")
   check_lsp_client(als_available)
