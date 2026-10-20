@@ -222,7 +222,6 @@ local function apply_project_state(prj_file, opts)
   if recompute_scenario then
     config.projectFile = M.project_file
     notify_configuration_change(config)
-    set_scenario_var()
     config = create_config(config)
     save_config(config, opts.json_path)
     notify_configuration_change(config)
@@ -408,6 +407,8 @@ function M.setup()
     set_scenario_var()
     json_config = create_config(json_config)
     save_config(json_config, json_path)
+  else
+    M.scenario_variables = vim.deepcopy(json_config.scenarioVariables)
   end
 
   notify_configuration_change(json_config)
