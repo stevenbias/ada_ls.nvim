@@ -222,6 +222,7 @@ local function apply_project_state(prj_file, opts)
   if recompute_scenario then
     config.projectFile = M.project_file
     notify_configuration_change(config)
+    set_scenario_var()
     config = create_config(config)
     save_config(config, opts.json_path)
     notify_configuration_change(config)
