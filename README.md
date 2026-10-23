@@ -24,7 +24,7 @@ snippets and SPARK formal verification.
 ## Requirements
 
 - **Neovim** >= 0.11 (developed and tested on 0.12)
-- **[Ada Language Server](https://github.com/AdaCore/ada_language_server)** - Must be available in `$PATH`
+- **[Ada Language Server](https://github.com/AdaCore/ada_language_server)** >= 2027.0 - Must be available in `$PATH`
 - **GNAT** (`gprbuild`, `gprclean`) - Must be available in `$PATH`
 - **[SPARK](https://github.com/AdaCore/spark2014)** / `gnatprove` - Optional, required only for `:Spark` commands
 
@@ -102,6 +102,7 @@ If Telescope is installed, `:Als pick_gpr` uses a Telescope picker. Otherwise it
 | `:Als health` | Open `:checkhealth ada_ls` |
 | `:Als other` | Go to corresponding .ads/.adb file |
 | `:Als pick_gpr` | Select GPR file via Telescope picker or `vim.ui.select()` fallback |
+| `:Als scenario_variables` | Select and update scenario variables (requires ALS 2027.0+) |
 
 #### Project View commands (ALS 2026.3+)
 | Command | Description |
@@ -146,6 +147,7 @@ vim.keymap.set("n", "<leader>ap", "<cmd>Als edit_gpr<cr>", { desc = "Als edit Pr
 vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick Gpr" })
 vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als Other file" })
 vim.keymap.set("n", "<leader>af", "<cmd>Als format<cr>", { desc = "Als Format" })
+vim.keymap.set("n", "<leader>as", "<cmd>Als scenario_variables<cr>", { desc = "Als Scenario variables" })
 vim.keymap.set("n", "<leader>av", "<cmd>Als project_view<cr>", { desc = "Als project View" })
 vim.keymap.set("n", "<leader>al", "<cmd>Als project_files<cr>", { desc = "Als List project files" })
 ```
