@@ -30,6 +30,7 @@ function M.cleanup_packages()
   package.preload["ada_ls.spark.config"] = nil
   package.preload["ada_ls.lspconfig"] = nil
   package.preload["ada_ls.refactoring"] = nil
+  package.preload["ada_ls.scenario_variables"] = nil
   package.preload["ada_ls.project_view"] = nil
   package.preload["ada_ls.project_view.data"] = nil
   package.preload["ada_ls.project_view.telescope"] = nil
@@ -49,6 +50,7 @@ function M.cleanup_packages()
   package.loaded["ada_ls.spark.config"] = nil
   package.loaded["ada_ls.lspconfig"] = nil
   package.loaded["ada_ls.refactoring"] = nil
+  package.loaded["ada_ls.scenario_variables"] = nil
   package.loaded["ada_ls.project_view"] = nil
   package.loaded["ada_ls.project_view.data"] = nil
   package.loaded["ada_ls.project_view.telescope"] = nil
@@ -402,6 +404,7 @@ function M.setup_utils_mock(opts)
       return opts.server_project
     end,
     notify = stub.new(),
+    notify_server = stub.new(),
   })
 end
 

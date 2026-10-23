@@ -1412,5 +1412,44 @@ describe("ada_ls.project", function()
         assert.is_true(common.find_stub_call(vim.notify, "Could not read"))
       end)
     end)
+
+    describe("update_scenario_variable", function()
+      local project
+
+      before_each(function()
+        common.cleanup_packages()
+        setup_base_mocks()
+        project = require("ada_ls.project")
+      end)
+
+      after_each(function()
+        project.clear()
+        common.cleanup_packages()
+      end)
+
+      it("notifies error when variable name is nil", function()
+        project.update_scenario_variable(nil, "value")
+
+        assert.is_true(
+          common.find_stub_call(vim.notify, "Variable name and value")
+        )
+      end)
+
+      it("notifies error when variable value is nil", function()
+        project.update_scenario_variable("MODE", nil)
+
+        assert.is_true(
+          common.find_stub_call(vim.notify, "Variable name and value")
+        )
+      end)
+
+      it("notifies error when both name and value are nil", function()
+        project.update_scenario_variable(nil, nil)
+
+        assert.is_true(
+          common.find_stub_call(vim.notify, "Variable name and value")
+        )
+      end)
+    end)
   end
 end)
