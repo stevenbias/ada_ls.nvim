@@ -116,4 +116,8 @@ function M.get_project_view_info()
   return M.send_command("als-project-view-information", nil, 5000)
 end
 
+function M.get_scenario_variables_info()
+  return M.send_command("als-scenario-variables-information", nil, 1500)
+end
+
 return M
