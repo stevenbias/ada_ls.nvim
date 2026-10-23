@@ -355,6 +355,47 @@ function M.decode_json_config(json_config_path)
   return M.project_file, scenario_vars_string, json_config
 end
 
+function M.update_scenario_variable(var_name, var_value)
+  if not var_name or not var_value then
+    require("ada_ls.utils").notify(
+      "Variable name and value must be provided",
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
+  local conf_file = require("ada_ls.utils").get_conf_file()
+  if conf_file == nil then
+    require("ada_ls.utils").notify(
+      "No configuration file found",
+      vim.log.levels.WARN
+    )
+    return
+  end
+
+  local _, _, json_config = M.decode_json_config(conf_file)
+
+  if not json_config then
+    require("ada_ls.utils").notify(
+      "Failed to decode Ada LSP configuration from " .. conf_file,
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
+  if json_config["scenarioVariables"] then
+    for k, v in pairs(json_config["scenarioVariables"]) do
+      M.scenario_variables[k] = v
+    end
+  end
+
+  M.scenario_variables[var_name] = var_value
+
+  local config = create_config()
+  save_config(config)
+  notify_configuration_change(config)
+end
+
 function M.setup()
   if vim.opt.diff:get() or M.is_setup then
     return
@@ -408,6 +449,8 @@ function M.setup()
     set_scenario_var()
     json_config = create_config(json_config)
     save_config(json_config, json_path)
+  else
+    M.scenario_variables = vim.deepcopy(json_config.scenarioVariables)
   end
 
   notify_configuration_change(json_config)

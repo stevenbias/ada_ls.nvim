@@ -51,7 +51,7 @@ Features:
 REQUIREMENTS                                          *ada_ls-requirements*
 
 - Neovim >= 0.11 (developed and tested on 0.12)
-- Ada Language Server (ALS) installed and available in PATH
+- Ada Language Server (ALS) >= 2027.0+ installed and available in PATH
 - GNAT project file (GPR) for your project
 - GNAT toolchain with gprbuild and gprclean
 - gnatprove for SPARK commands (optional)
@@ -173,6 +173,7 @@ commands and <leader>s prefix for SPARK commands: >lua
     vim.keymap.set("n", "<leader>ag", "<cmd>Als pick_gpr<cr>", { desc = "Als pick Gpr" })
     vim.keymap.set("n", "<leader>ao", "<cmd>Als other<cr>", { desc = "Als Other file" })
     vim.keymap.set("n", "<leader>af", "<cmd>Als format<cr>", { desc = "Als Format" })
+    vim.keymap.set("n", "<leader>as", "<cmd>Als scenario_variables<cr>", { desc = "Als Scenario variables" })
 
     -- Project View commands
     vim.keymap.set("n", "<leader>av", "<cmd>Als project_view<cr>", { desc = "Als project View" })
@@ -242,6 +243,13 @@ COMMANDS                                                  *ada_ls-commands*
 :Als project_files                                     *:Als-project_files*
     Open a Telescope picker to select a source file from the project.
     Shows all Ada source files across all projects. Requires Telescope.
+
+:Als scenario_variables                           *:Als-scenario_variables*
+    Select and update scenario variables for the active GPR project.
+    Opens an interactive picker to choose a scenario variable, then
+    select a new value from the possible values. Updates the project
+    configuration and notifies the ALS of the change. Requires ALS
+    2027.0 or later.
 
 :Spark                                                          *:Spark*
     Main command for SPARK formal verification. Provides subcommands

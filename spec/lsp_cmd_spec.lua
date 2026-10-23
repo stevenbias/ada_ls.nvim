@@ -299,4 +299,77 @@ describe("ada_ls.lsp_cmd", function()
       assert.equals("Command not found", err)
     end)
   end)
+
+  describe("get_scenario_variables_info", function()
+    it("returns scenario variables info on success", function()
+      local response = {
+        variables = {
+          {
+            name = "MODE",
+            value = "debug",
+            ["possible-values"] = { "debug", "release" },
+          },
+        },
+      }
+      local mock_client = common.create_lsp_client({
+        request = function(_self, _method, _params, callback)
+          callback(nil, response)
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.get_scenario_variables_info()
+
+      assert.is_nil(err)
+      assert.same(response, result)
+    end)
+
+    it("returns nil and error when LSP command fails", function()
+      local mock_client = common.create_lsp_client({
+        request = function(_self, _method, _params, callback)
+          callback("Command not supported", nil)
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.get_scenario_variables_info()
+
+      assert.is_nil(result)
+      assert.equals("Command not supported", err)
+    end)
+
+    it("sends command with nil args parameter", function()
+      local captured_params = nil
+      local mock_client = common.create_lsp_client({
+        request = function(_self, _method, params, callback)
+          captured_params = params
+          callback(nil, { variables = {} })
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      lsp_cmd.get_scenario_variables_info()
+
+      assert.equals(
+        "als-scenario-variables-information",
+        captured_params.command
+      )
+      assert.is_nil(captured_params.arguments)
+    end)
+
+    it("returns empty variables list when LSP returns no variables", function()
+      local response = { variables = {} }
+      local mock_client = common.create_lsp_client({
+        request = function(_self, _method, _params, callback)
+          callback(nil, response)
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.get_scenario_variables_info()
+
+      assert.is_nil(err)
+      assert.same({ variables = {} }, result)
+    end)
+  end)
 end)

@@ -93,6 +93,11 @@ local als_subcmd_tbl = {
       require("ada_ls.project_view").toggle()
     end,
   },
+  scenario_variables = {
+    impl = function()
+      require("ada_ls.scenario_variables").set_variable()
+    end,
+  },
 }
 
 ---@type table<string, MyCmdSubcommand>
