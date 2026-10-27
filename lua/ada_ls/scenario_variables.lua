@@ -47,6 +47,10 @@ function M.set_variable()
   end
 
   local project_name = nil or require("ada_ls.utils").get_server_project_name()
+  if not project_name then
+    return nil, "Please pick a project first using the 'pick_gpr' command"
+  end
+
   local idx = vim.fn.inputlist({
     "Select scenario variable to edit for " .. project_name,
     table.concat(items_name, "\n"),

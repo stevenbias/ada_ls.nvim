@@ -149,31 +149,54 @@ local function set_scenario_var()
     return
   end
 
-  local gpr_files = { M.project_file }
-  local uri_gpr_files =
-    require("ada_ls.lsp_cmd").get_prj_dependencies(M.project_file)
+  local scenario_variables, err =
+    require("ada_ls.scenario_variables").get_variables()
+  if not scenario_variables or err then
+    require("ada_ls.utils").notify(
+      "Failed to retrieve scenario variables: " .. err,
+      vim.log.levels.WARN
+    )
+    return
+  end
 
-  if uri_gpr_files and next(uri_gpr_files) then
-    for _, f in pairs(uri_gpr_files) do
-      table.insert(gpr_files, vim.uri_to_fname(f.uri))
+  local missing_vars = {}
+  for name, var in pairs(scenario_variables) do
+    if var.value == nil then
+      table.insert(missing_vars, name)
+    else
+      M.scenario_variables[name] = var.value
     end
   end
 
-  for _, file in pairs(gpr_files) do
-    if not file or vim.fn.filereadable(file) ~= 1 then
-      require("ada_ls.utils").notify(
-        "Could not read Ada project file: " .. file,
-        vim.log.levels.WARN
-      )
-      return
+  -- If there are missing variables, attempt to read their default values from
+  -- the project file and its dependencies
+  if #missing_vars > 0 then
+    local gpr_files = { M.project_file }
+    local uri_gpr_files =
+      require("ada_ls.lsp_cmd").get_prj_dependencies(M.project_file)
+
+    if uri_gpr_files and next(uri_gpr_files) then
+      for _, f in pairs(uri_gpr_files) do
+        table.insert(gpr_files, vim.uri_to_fname(f.uri))
+      end
     end
 
-    for line in io.lines(file) do
-      for key, value in
-        line:gmatch('external%s*%(%s*"([^"]+)"%s*,%s*"([^"]+)"%s*%)')
-      do
-        if not M.scenario_variables[key] then
-          M.scenario_variables[key] = value
+    for _, file in pairs(gpr_files) do
+      if not file or vim.fn.filereadable(file) ~= 1 then
+        require("ada_ls.utils").notify(
+          "Could not read Ada project file: " .. file,
+          vim.log.levels.WARN
+        )
+        return
+      end
+
+      for line in io.lines(file) do
+        for key, value in
+          line:gmatch('external%s*%(%s*"([^"]+)"%s*,%s*"([^"]+)"%s*%)')
+        do
+          if vim.tbl_contains(missing_vars, key) then
+            M.scenario_variables[key] = value
+          end
         end
       end
     end
