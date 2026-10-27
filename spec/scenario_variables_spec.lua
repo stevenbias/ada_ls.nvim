@@ -143,6 +143,7 @@ describe("ada_ls.scenario_variables", function()
       local utils_mock = {
         notify = stub.new(),
         get_conf_file = stub.new().returns("/project/.als.json"),
+        get_server_project_name = stub.new().returns("test_project"),
       }
       package.loaded["ada_ls.utils"] = utils_mock
 

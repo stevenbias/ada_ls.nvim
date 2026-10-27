@@ -1119,6 +1119,26 @@ describe("ada_ls.project", function()
         assert.is_table(call_args[3].settings)
         assert.is_table(call_args[3].settings.ada)
       end)
+
+      it("notifies with skip_json_file=false by default", function()
+        local mock_client = common.create_lsp_client()
+        common.setup_lsp_client(mock_client)
+
+        local config = { projectFile = "/project/my.gpr" }
+        project._notify_configuration_change(config, false)
+
+        assert.stub(mock_client.notify).was_called()
+      end)
+
+      it("notifies with skip_json_file=true when specified", function()
+        local mock_client = common.create_lsp_client()
+        common.setup_lsp_client(mock_client)
+
+        local config = { projectFile = "/project/my.gpr" }
+        project._notify_configuration_change(config, true)
+
+        assert.stub(mock_client.notify).was_called()
+      end)
     end)
 
     describe("_save_new_configuration", function()
@@ -1415,15 +1435,18 @@ describe("ada_ls.project", function()
 
     describe("update_scenario_variable", function()
       local project
+      local utils
 
       before_each(function()
         common.cleanup_packages()
         setup_base_mocks()
+        utils = require("ada_ls.utils")
         project = require("ada_ls.project")
       end)
 
       after_each(function()
         project.clear()
+        utils.clear()
         common.cleanup_packages()
       end)
 
@@ -1449,6 +1472,17 @@ describe("ada_ls.project", function()
         assert.is_true(
           common.find_stub_call(vim.notify, "Variable name and value")
         )
+      end)
+
+      it("notifies error when no configuration file found", function()
+        local utils_mod = require("ada_ls.utils")
+        utils_mod.get_conf_file = function()
+          return nil
+        end
+
+        project.update_scenario_variable("MODE", "release")
+
+        assert.is_true(common.find_stub_call(vim.notify, "configuration file"))
       end)
     end)
   end
