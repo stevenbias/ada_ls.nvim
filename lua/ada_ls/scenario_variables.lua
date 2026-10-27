@@ -46,8 +46,9 @@ function M.set_variable()
     name_idx = name_idx + 1
   end
 
+  local project_name = nil or require("ada_ls.utils").get_server_project_name()
   local idx = vim.fn.inputlist({
-    "Select scenario variable to edit",
+    "Select scenario variable to edit for " .. project_name,
     table.concat(items_name, "\n"),
   })
 

@@ -97,11 +97,12 @@ local function als_root_dir(startpath)
   return ada_ls_conf_path
 end
 
-local function notify_configuration_change(config)
+local function notify_configuration_change(config, skip_json_file)
   config = { ada = config }
   require("ada_ls.utils").notify_server(
     "workspace/didChangeConfiguration",
-    { settings = config }
+    { settings = config },
+    skip_json_file
   )
 end
 
@@ -388,7 +389,7 @@ function M.update_scenario_variable(var_name, var_value)
 
   local config = create_config()
   save_config(config)
-  notify_configuration_change(config)
+  notify_configuration_change(config, true)
 end
 
 function M.setup()

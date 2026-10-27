@@ -164,11 +164,13 @@ function M.get_json_file()
   return M.json_file
 end
 
-function M.notify_server(method, params)
+function M.notify_server(method, params, skip_json_file)
   local client = M.get_ada_ls()
   if client ~= nil then
     set_server_project_name(params)
-    set_json_file()
+    if not skip_json_file then
+      set_json_file()
+    end
     return client:notify(method, params)
   end
   return false
