@@ -2,6 +2,10 @@ local M = {}
 
 function M.get_info()
   local lsp_cmd = require("ada_ls.lsp_cmd")
+  -- Check if the function exists and is callable (could be a table for stubs in tests)
+  if not lsp_cmd.get_scenario_variables_info then
+    return { variables = {} }, nil
+  end
   local result, err = lsp_cmd.get_scenario_variables_info()
   if err then
     return nil, err
