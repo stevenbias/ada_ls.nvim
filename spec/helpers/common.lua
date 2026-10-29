@@ -579,6 +579,35 @@ function M.setup_lsp_cmd_project_view_mock(response, err)
   return mock
 end
 
+-- Create a complete lsp_cmd mock with all commonly needed functions
+---@param overrides? table Custom function implementations to override defaults
+---@return table mock
+function M.create_lsp_cmd_mock(overrides)
+  overrides = overrides or {}
+  local mock = {
+    get_prj_file = overrides.get_prj_file or function()
+      return "/project/default.gpr"
+    end,
+    get_prj_dependencies = overrides.get_prj_dependencies or function()
+      return nil
+    end,
+    get_root_dir = overrides.get_root_dir or function()
+      return "/project"
+    end,
+    get_scenario_variables_info = overrides.get_scenario_variables_info
+      or function()
+        return {
+          variables = {},
+        }
+      end,
+    get_project_view_info = overrides.get_project_view_info or function()
+      return nil, "Command not supported"
+    end,
+  }
+  rawset(package.loaded, "ada_ls.lsp_cmd", mock)
+  return mock
+end
+
 -- Optional dependency detection for Tier 2 tests
 ---@return boolean
 function M.has_telescope()

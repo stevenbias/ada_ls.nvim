@@ -185,6 +185,17 @@ describe("ada_ls.utils", function()
   end)
 
   describe("notify_server", function()
+    before_each(function()
+      common.cleanup_packages()
+      common.setup_vim_globals()
+      utils = require("ada_ls.utils")
+    end)
+
+    after_each(function()
+      utils.clear()
+      common.cleanup_packages()
+    end)
+
     it("returns false when no LSP client", function()
       vim.lsp.get_clients = stub.new().returns({})
 
@@ -198,6 +209,42 @@ describe("ada_ls.utils", function()
 
       utils.notify_server("test/method", { key = "value" })
 
+      assert.stub(mock_client.notify).was_called()
+    end)
+
+    it(
+      "notifies client with workspace/didChangeConfiguration including skip_json_file flag",
+      function()
+        local mock_client = common.create_lsp_client()
+        common.setup_lsp_client(mock_client)
+
+        utils.notify_server(
+          "workspace/didChangeConfiguration",
+          { settings = { ada = {} } },
+          false
+        )
+
+        assert.stub(mock_client.notify).was_called()
+        local call = mock_client.notify.calls[1]
+        assert.equals("workspace/didChangeConfiguration", call.vals[2])
+      end
+    )
+
+    it("accepts skip_json_file parameter when true", function()
+      local mock_client = common.create_lsp_client()
+      common.setup_lsp_client(mock_client)
+
+      -- Should not error with skip_json_file=true
+      utils.notify_server("test/method", {}, true)
+      assert.stub(mock_client.notify).was_called()
+    end)
+
+    it("accepts skip_json_file parameter when false", function()
+      local mock_client = common.create_lsp_client()
+      common.setup_lsp_client(mock_client)
+
+      -- Should not error with skip_json_file=false
+      utils.notify_server("test/method", {}, false)
       assert.stub(mock_client.notify).was_called()
     end)
   end)

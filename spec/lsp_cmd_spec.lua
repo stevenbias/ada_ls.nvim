@@ -338,11 +338,11 @@ describe("ada_ls.lsp_cmd", function()
       assert.equals("Command not supported", err)
     end)
 
-    it("sends command with nil args parameter", function()
-      local captured_params = nil
+    it("sends command with no timeout specified", function()
+      local captured_call = {}
       local mock_client = common.create_lsp_client({
-        request = function(_self, _method, params, callback)
-          captured_params = params
+        request = function(_self, method, params, callback)
+          captured_call = { method = method, params = params }
           callback(nil, { variables = {} })
         end,
       })
@@ -352,9 +352,9 @@ describe("ada_ls.lsp_cmd", function()
 
       assert.equals(
         "als-scenario-variables-information",
-        captured_params.command
+        captured_call.params.command
       )
-      assert.is_nil(captured_params.arguments)
+      assert.is_nil(captured_call.params.arguments)
     end)
 
     it("returns empty variables list when LSP returns no variables", function()

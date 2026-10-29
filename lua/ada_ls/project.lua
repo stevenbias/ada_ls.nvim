@@ -97,11 +97,12 @@ local function als_root_dir(startpath)
   return ada_ls_conf_path
 end
 
-local function notify_configuration_change(config)
+local function notify_configuration_change(config, skip_json_file)
   config = { ada = config }
   require("ada_ls.utils").notify_server(
     "workspace/didChangeConfiguration",
-    { settings = config }
+    { settings = config },
+    skip_json_file
   )
 end
 
@@ -148,7 +149,28 @@ local function set_scenario_var()
     return
   end
 
-  M.scenario_variables = {}
+  local scenario_variables, err =
+    require("ada_ls.scenario_variables").get_variables()
+  if not scenario_variables or err then
+    require("ada_ls.utils").notify(
+      "Failed to retrieve scenario variables: " .. (err or "unknown error"),
+      vim.log.levels.WARN
+    )
+    return
+  end
+
+  local missing_vars = {}
+  for name, var in pairs(scenario_variables) do
+    if var.value == nil then
+      table.insert(missing_vars, name)
+    else
+      M.scenario_variables[name] = var.value
+    end
+  end
+
+  -- Always attempt to read external variables from the project file and its
+  -- dependencies, even if the LSP doesn't report any known variables.
+  -- This allows discovery of variables defined in GPR files.
   local gpr_files = { M.project_file }
   local uri_gpr_files =
     require("ada_ls.lsp_cmd").get_prj_dependencies(M.project_file)
@@ -172,7 +194,14 @@ local function set_scenario_var()
       for key, value in
         line:gmatch('external%s*%(%s*"([^"]+)"%s*,%s*"([^"]+)"%s*%)')
       do
-        M.scenario_variables[key] = value
+        -- Add external variable if it's in missing_vars or if no known vars exist
+        -- but only if the variable isn't already set
+        if
+          (#missing_vars == 0 or vim.tbl_contains(missing_vars, key))
+          and M.scenario_variables[key] == nil
+        then
+          M.scenario_variables[key] = value
+        end
       end
     end
   end
@@ -215,21 +244,15 @@ local function apply_project_state(prj_file, opts)
 
   local config = opts.config and vim.deepcopy(opts.config)
     or { projectFile = prj_file }
-  local recompute_scenario = opts.recompute_scenario == true
 
   M.project_file = prj_file
 
-  if recompute_scenario then
-    config.projectFile = M.project_file
-    notify_configuration_change(config)
-    set_scenario_var()
-    config = create_config(config)
-    save_config(config, opts.json_path)
-    notify_configuration_change(config)
-  else
-    config.projectFile = M.project_file
-    notify_configuration_change(config)
-  end
+  config.projectFile = M.project_file
+  notify_configuration_change(config)
+  set_scenario_var()
+  config = create_config(config)
+  save_config(config, opts.json_path)
+  notify_configuration_change(config)
 
   local folder = get_abspath(M.project_file)
   notify_workspace_folders_add({ folder })
@@ -279,7 +302,7 @@ function M.pick_gpr_file()
       "Only one Ada project file found: " .. files[1],
       vim.log.levels.INFO
     )
-    apply_project_state(files[1], { recompute_scenario = true })
+    apply_project_state(files[1])
   else
     local ok_telescope, pickers = pcall(require, "telescope.pickers")
     if ok_telescope then
@@ -294,7 +317,7 @@ function M.pick_gpr_file()
               actions.close(prompt_buffer)
               local selection =
                 require("telescope.actions.state").get_selected_entry()
-              apply_project_state(selection[1], { recompute_scenario = true })
+              apply_project_state(selection[1])
             end)
             return true
           end,
@@ -309,7 +332,7 @@ function M.pick_gpr_file()
         { prompt = "Ada project files picker" },
         function(choice)
           if choice then
-            apply_project_state(choice, { recompute_scenario = true })
+            apply_project_state(choice)
           end
         end
       )
@@ -393,7 +416,7 @@ function M.update_scenario_variable(var_name, var_value)
 
   local config = create_config()
   save_config(config)
-  notify_configuration_change(config)
+  notify_configuration_change(config, true)
 end
 
 function M.setup()

@@ -95,7 +95,11 @@ local als_subcmd_tbl = {
   },
   scenario_variables = {
     impl = function()
-      require("ada_ls.scenario_variables").set_variable()
+      local _, err = require("ada_ls.scenario_variables").set_variable()
+      if err then
+        local notify = require("ada_ls.utils").notify
+        notify(err, vim.log.levels.WARN)
+      end
     end,
   },
 }
