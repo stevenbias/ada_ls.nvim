@@ -437,7 +437,9 @@ function M.setup()
     callback = function()
       local _, _, json_config = M.decode_json_config(json_path)
       require("ada_ls.gprtools").makeprg_setup(json_config)
-      require("ada_ls.utils").reset_als_client()
+      -- Notify ALS of configuration change without restarting the LSP client
+      notify_configuration_change(json_config)
+      require("ada_ls.project_view").invalidate()
     end,
   })
 

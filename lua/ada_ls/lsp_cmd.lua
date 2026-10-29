@@ -96,7 +96,7 @@ function M.get_prj_dependencies(prj_file)
     uri = vim.uri_from_fname(prj_file),
     direction = 1,
   }
-  return M.send_command("als-gpr-dependencies", arg, 1500)
+  return M.send_command("als-gpr-dependencies", arg, 1000)
 end
 
 function M.go_to_other()
@@ -109,7 +109,7 @@ function M.get_src_dirs()
 end
 
 function M.get_obj_dir()
-  return M.send_command("als-object-dir", nil, 1500)
+  return M.send_command("als-object-dir", nil, 1000)
 end
 
 function M.get_project_view_info()
