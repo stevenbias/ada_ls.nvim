@@ -66,9 +66,8 @@ local function build_args(kind, state)
 end
 
 -- Parse gnatprove output and populate quickfix
-local function populate_quickfix(output, cwd)
+local function populate_quickfix(output, cwd, source_dirs)
   local qf_items = {}
-  local source_dirs
 
   local function source_path(file)
     if file:match("^/") or file:match("^%a:[/\\]") then
@@ -79,12 +78,12 @@ local function populate_quickfix(output, cwd)
       return relative
     end
     -- GNATprove often prints only the basename even when a GPR project uses
-    -- source directories outside its root. Resolve it through ALS so quickfix
-    -- jumps to the source rather than creating an empty buffer at the root.
-    if not source_dirs then
-      source_dirs = require("ada_ls.lsp_cmd").get_src_dirs() or {}
-    end
-    for _, directory in ipairs(source_dirs) do
+    -- source directories outside its root. Use the proof's captured directories
+    -- so a later buffer switch cannot redirect diagnostics to another project.
+    for _, directory in ipairs(source_dirs or {}) do
+      if type(directory) == "table" then
+        directory = directory.uri
+      end
       if type(directory) == "string" then
         if directory:match("^file:") then
           directory = vim.uri_to_fname(directory)
@@ -181,8 +180,12 @@ local function run_gnatprove(kind, state)
     vim.log.levels.INFO
   )
 
-  -- Get working directory
+  -- Capture the project context before starting the asynchronous proof.
   local cwd = lsp_cmd.get_root_dir() or vim.fn.getcwd()
+  local source_dirs = {}
+  if kind ~= "clean" then
+    source_dirs = lsp_cmd.get_src_dirs() or {}
+  end
 
   local stdout_chunks = {}
   local stderr_chunks = {}
@@ -223,7 +226,7 @@ local function run_gnatprove(kind, state)
       -- Parse output to quickfix
       local output = (result.stdout or table.concat(stdout_chunks, ""))
         .. (result.stderr or table.concat(stderr_chunks, ""))
-      populate_quickfix(output, cwd)
+      populate_quickfix(output, cwd, source_dirs)
     end)
   end)
 
