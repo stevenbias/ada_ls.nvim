@@ -15,8 +15,7 @@ jobs:
     name: Bump Version & Publish
     # Only run when PR is approved and comes from a release branch
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.review.state == 'approved' && github.event.pull_request.base.ref == 'main' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      github.event_name == 'workflow_dispatch' || (github.event.review.state == 'approved' && github.event.pull_request.base.ref == 'main' && startsWith(github.event.pull_request.head.ref, 'release/'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release branch
@@ -80,7 +79,6 @@ jobs:
           version: ${{ steps.luarocks_tag.outputs.tag }}
           name: ada_ls.nvim
           dependencies: |
-            telescope.nvim
             lua >= 5.1
           test_dependencies: |
             busted

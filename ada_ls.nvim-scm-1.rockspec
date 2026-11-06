@@ -31,6 +31,7 @@ build = {
   type = "builtin",
   copy_directories = {
     "doc",
+    "ftdetect",
     "plugin",
     "after",
   },
