@@ -1,4 +1,4 @@
-name: Publish to LuaRocks
+name: Publish to LuaRocks v2
 run-name: ${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}
 on:
   pull_request_review:
