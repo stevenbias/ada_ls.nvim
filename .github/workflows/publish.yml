@@ -32,6 +32,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Mark publication status pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT_SHA=$(git rev-parse --verify HEAD^{commit})
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$CURRENT_SHA" \
+            -f state=pending \
+            -f context=ada-ls/luarocks-publish \
+            -f description="Bump/publish in progress"
       - name: Install commitizen
         run: pip install commitizen
       - name: Check if final version already tagged
