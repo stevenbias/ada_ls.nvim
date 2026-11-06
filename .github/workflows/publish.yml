@@ -1,4 +1,5 @@
 name: Publish to LuaRocks
+run-name: ${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}
 on:
   pull_request_review:
     types: [submitted]
@@ -10,6 +11,7 @@ on:
         type: string
 permissions:
   contents: write
+  statuses: write
 jobs:
   publish:
     name: Bump Version & Publish
@@ -17,6 +19,8 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' || (github.event.review.state == 'approved' && github.event.pull_request.base.ref == 'main' && startsWith(github.event.pull_request.head.ref, 'release/'))
     runs-on: ubuntu-latest
+    env:
+      RELEASE_BRANCH: ${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}
     steps:
       - name: Checkout release branch
         uses: actions/checkout@v4
@@ -34,7 +38,7 @@ jobs:
         id: check_tag
         run: |
           # Extract expected final version from branch name
-          BRANCH="${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}"
+          BRANCH="$RELEASE_BRANCH"
           FINAL_TAG=$(echo "$BRANCH" | sed 's|release/||')
           echo "final_tag=${FINAL_TAG}" >> "$GITHUB_OUTPUT"
 
@@ -48,6 +52,7 @@ jobs:
       - name: Bump to final version
         if: steps.check_tag.outputs.already_tagged == 'false'
         id: bump
+        shell: bash
         run: |
           # cz bump strips the pre-release suffix and produces the final tag
           # e.g. v0.2.0-rc.0 → v0.2.0
@@ -61,7 +66,7 @@ jobs:
       - name: Push changes and tag to release branch
         if: steps.check_tag.outputs.already_tagged == 'false'
         run: |
-          git push origin "${{ github.event.inputs.release_branch || github.event.pull_request.head.ref }}" --tags
+          git push origin "$RELEASE_BRANCH" --tags
       - name: Determine tag for LuaRocks
         id: luarocks_tag
         run: |
@@ -72,7 +77,6 @@ jobs:
           fi
       - name: Publish to LuaRocks
         uses: nvim-neorocks/luarocks-tag-release@v7
-        continue-on-error: true
         env:
           LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
         with:
@@ -95,3 +99,11 @@ jobs:
             Manages .gpr project files, configures gprbuild as :make,
             offers a Telescope picker for GPR files, and exposes LSP commands.
           license: "MIT"
+      - name: Record successful publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.luarocks_tag.outputs.tag }}
+        run: |
+          RELEASE_SHA=$(git rev-parse "${RELEASE_TAG}^{commit}")
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$RELEASE_SHA" \
+            -f state=success -f context=ada-ls/luarocks-publish
