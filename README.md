@@ -15,7 +15,8 @@ project management, project view, build commands, GPR file support, VS Code-comp
 snippets and SPARK formal verification.
 
 ### Demo
-[ada_ls.nvim in action](media/ada_ls_als_demo.mp4)
+https://github.com/user-attachments/assets/4e5eac3f-2396-4bcb-aef2-e015f2a6ca19
+
 
 ## Quick Start (30 seconds)
 
