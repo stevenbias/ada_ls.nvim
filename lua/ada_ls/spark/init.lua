@@ -68,6 +68,39 @@ end
 -- Parse gnatprove output and populate quickfix
 local function populate_quickfix(output, cwd)
   local qf_items = {}
+  local source_dirs
+
+  local function source_path(file)
+    if file:match("^/") or file:match("^%a:[/\\]") then
+      return file
+    end
+    local relative = vim.fs.joinpath(cwd, file)
+    if vim.fn.filereadable(relative) == 1 then
+      return relative
+    end
+    -- GNATprove often prints only the basename even when a GPR project uses
+    -- source directories outside its root. Resolve it through ALS so quickfix
+    -- jumps to the source rather than creating an empty buffer at the root.
+    if not source_dirs then
+      source_dirs = require("ada_ls.lsp_cmd").get_src_dirs() or {}
+    end
+    for _, directory in ipairs(source_dirs) do
+      if type(directory) == "string" then
+        if directory:match("^file:") then
+          directory = vim.uri_to_fname(directory)
+        elseif
+          not directory:match("^/") and not directory:match("^%a:[/\\]")
+        then
+          directory = vim.fs.joinpath(cwd, directory)
+        end
+        local candidate = vim.fs.joinpath(directory, file)
+        if vim.fn.filereadable(candidate) == 1 then
+          return candidate
+        end
+      end
+    end
+    return relative
+  end
 
   -- gnatprove --output=oneline format:
   -- filename:line:col: severity: message
@@ -85,14 +118,8 @@ local function populate_quickfix(output, cwd)
         qf_type = "I"
       end
 
-      -- Make path absolute if relative
-      local filepath = file
-      if not file:match("^/") then
-        filepath = cwd .. "/" .. file
-      end
-
       table.insert(qf_items, {
-        filename = filepath,
+        filename = source_path(file),
         lnum = tonumber(lnum),
         col = tonumber(col) or 1,
         text = "[" .. severity .. "] " .. msg,

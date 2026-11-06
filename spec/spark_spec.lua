@@ -535,6 +535,54 @@ other.ads:5:1: error: cannot prove precondition
           assert.equals("/abs/path/file.adb", qf_opts.items[1].filename)
         end)
 
+        it(
+          "resolves basenames in project and external source directories",
+          function()
+            local get_src_dirs = stub.new().returns({ "src", "file:///shared" })
+            package.loaded["ada_ls.lsp_cmd"] = { get_src_dirs = get_src_dirs }
+            vim.fn.filereadable = function(path)
+              return (
+                path == "/project/src/main.adb" or path == "/shared/other.ads"
+              )
+                  and 1
+                or 0
+            end
+            spark._populate_quickfix(
+              "main.adb:10:5: info: range check proved\nother.ads:5:1: info: postcondition proved\n",
+              "/project"
+            )
+
+            local items = vim.fn.setqflist.calls[1].vals[3].items
+            assert.equals("/project/src/main.adb", items[1].filename)
+            assert.equals("/shared/other.ads", items[2].filename)
+            assert.equals(10, items[1].lnum)
+            assert.equals(5, items[1].col)
+            assert.stub(get_src_dirs).was_called(1)
+          end
+        )
+
+        it(
+          "keeps the relative diagnostic path when ALS sources are unavailable",
+          function()
+            package.loaded["ada_ls.lsp_cmd"] = {
+              get_src_dirs = function()
+                return nil, "No client"
+              end,
+            }
+            vim.fn.filereadable = function()
+              return 0
+            end
+            spark._populate_quickfix(
+              "missing.adb:3:2: medium: check might fail\n",
+              "/project"
+            )
+
+            local item = vim.fn.setqflist.calls[1].vals[3].items[1]
+            assert.equals("/project/missing.adb", item.filename)
+            assert.equals("W", item.type)
+          end
+        )
+
         it("opens quickfix when items present", function()
           local output = "main.adb:1:1: info: test\n"
           spark._populate_quickfix(output, "/project")

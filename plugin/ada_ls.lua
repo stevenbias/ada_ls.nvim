@@ -186,15 +186,11 @@ local function create_command(cmd_name)
         return subcommand_tbl[subcmd_key].complete(subcmd_arg_lead)
       end
       -- Check if cmdline is a subcommand
-      if cmdline:match("^['<,'>]*" .. cmd_name .. "[!]*%s+%w*$") then
+      if cmdline:match("^['<,'>]*" .. cmd_name .. "[!]*%s+[%w_]*$") then
         -- Filter subcommands that match
-        local subcommand_keys = vim.tbl_keys(subcommand_tbl)
-        return vim
-          .iter(subcommand_keys)
-          :filter(function(key)
-            return key:find(arg_lead) ~= nil
-          end)
-          :totable()
+        return vim.tbl_filter(function(key)
+          return key:find(arg_lead) ~= nil
+        end, vim.tbl_keys(subcommand_tbl))
       end
     end,
     bang = true,

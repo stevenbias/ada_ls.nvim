@@ -68,6 +68,25 @@ describe("plugin/ada_ls.lua", function()
     end)
   end)
 
+  describe("subcommand completion", function()
+    it("completes Als subcommands after an underscore", function()
+      local commands = load_plugin_and_capture_commands()
+      local line = "Als project_"
+      local matches = commands.Als.opts.complete("project_", line, #line)
+      table.sort(matches)
+      assert.same({ "project_files", "project_view" }, matches)
+    end)
+
+    it("completes Spark subcommands after an underscore", function()
+      local commands = load_plugin_and_capture_commands()
+      local line = "Spark prove_f"
+      assert.same(
+        { "prove_file" },
+        commands.Spark.opts.complete("prove_f", line, #line)
+      )
+    end)
+  end)
+
   describe(":Als subcommand delegation", function()
     local commands
 

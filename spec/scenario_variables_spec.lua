@@ -331,6 +331,36 @@ describe("ada_ls.scenario_variables", function()
       end
     )
 
+    it(
+      "numbers value labels while updating with the raw selected value",
+      function()
+        lsp_cmd_mock.get_scenario_variables_info.returns({
+          variables = {
+            {
+              name = "BUILD_MODE",
+              value = "debug",
+              ["possible-values"] = { "debug", "release", "2 - custom" },
+            },
+          },
+        })
+        local prompts = {}
+        vim.fn.inputlist = function(items)
+          prompts[#prompts + 1] = items
+          return #prompts == 1 and 1 or 2
+        end
+
+        scenario_variables.set_variable()
+
+        assert.same({
+          "Select value for BUILD_MODE:",
+          "1 - debug\n2 - release\n3 - 2 - custom",
+        }, prompts[2])
+        assert
+          .stub(require("ada_ls.project").update_scenario_variable)
+          .was_called_with("BUILD_MODE", "release")
+      end
+    )
+
     it("displays nil value as string 'nil' in selection list", function()
       local response = {
         variables = {
