@@ -198,10 +198,10 @@ if [ "$TELESCOPE_AVAILABLE" = true ] || [ "$NEO_TREE_AVAILABLE" = true ]; then
     echo -e "${YELLOW}⚠ Warning: Could not fully validate Lua environment${NC}"
   fi
   
-  BUSTED_OUTPUT=$(timeout 600 bash -c 'ADA_LS_TEST_MODE=1 busted 2>&1' || BUSTED_EXIT=$?)
+  BUSTED_OUTPUT=$(timeout 600 bash -c 'ADA_LS_TEST_MODE=1 busted 2>&1') || BUSTED_EXIT=$?
   echo "$BUSTED_OUTPUT"
 else
-  BUSTED_OUTPUT=$(timeout 600 bash -c 'ADA_LS_TEST_MODE=1 busted 2>&1' || BUSTED_EXIT=$?)
+  BUSTED_OUTPUT=$(timeout 600 bash -c 'ADA_LS_TEST_MODE=1 busted 2>&1') || BUSTED_EXIT=$?
   echo "$BUSTED_OUTPUT"
 fi
 
@@ -218,6 +218,11 @@ SUCCESSES=$(echo "$BUSTED_OUTPUT" | grep -oP '\d+(?= successes)' | tail -1)
 FAILURES=$(echo "$BUSTED_OUTPUT" | grep -oP '\d+(?= failures)' | tail -1)
 ERRORS=$(echo "$BUSTED_OUTPUT" | grep -oP '\d+(?= errors)' | tail -1)
 PENDING=$(echo "$BUSTED_OUTPUT" | grep -oP '\d+(?= pending)' | tail -1)
+
+if [ -z "$SUCCESSES" ] || [ -z "$FAILURES" ] || [ -z "$ERRORS" ] || [ -z "$PENDING" ]; then
+  echo "FAIL: Busted did not produce a complete result summary (exit $BUSTED_EXIT)"
+  exit 1
+fi
 
 # Validate extracted counts (default to 0 if not found)
 SUCCESSES=${SUCCESSES:-0}
