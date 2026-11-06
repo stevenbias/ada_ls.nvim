@@ -67,9 +67,9 @@ end
 
 local function scenario_variables_to_args(scenario_variables_info)
   local args = {}
-  local variables =
-    type(scenario_variables_info) == "table" and scenario_variables_info.variables
-      or nil
+  local variables = type(scenario_variables_info) == "table"
+      and scenario_variables_info.variables
+    or nil
 
   if not vim.islist(variables) then
     return args
@@ -190,7 +190,10 @@ local function run_gnatprove(kind, state)
 
   -- Add -cargs -gnatef for better error messages (except for clean)
   if kind ~= "clean" then
-    vim.list_extend(args, scenario_variables_to_args(lsp_cmd.get_scenario_variables_info()))
+    vim.list_extend(
+      args,
+      scenario_variables_to_args(lsp_cmd.get_scenario_variables_info())
+    )
     table.insert(args, "-cargs")
     table.insert(args, "-gnatef")
   end
