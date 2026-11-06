@@ -4,14 +4,37 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Neovim](https://img.shields.io/badge/Neovim-0.11+-green.svg)](https://neovim.io)
 
+
+**Ada development in Neovim: LSP, build integration, project management, and formal verification—out of the box.**\
+[![Watch a one-minute video tour of ada_ls.nvim](https://gitdiagram.com/video-badge.svg)](https://gitdiagram.com/stevenbias/ada_ls.nvim/video)
+
+## What is ada_ls.nvim?
+
 Neovim plugin providing out-of-the-box Ada Language Server integration: GPR
 project management, project view, build commands, GPR file support, VS Code-compatible
 snippets and SPARK formal verification.
 
+### Demo
+https://github.com/user-attachments/assets/4e5eac3f-2396-4bcb-aef2-e015f2a6ca19
+
+
+## Quick Start (30 seconds)
+
+1. Install this plugin (see [Installation](#installation) below)
+2. Open an Ada file in your project
+3. Run `:Als pick_gpr` to select your project's `.gpr` file
+4. Run `:Als build` to build
+5. Use LSP features normally (hover, goto definition, completions, etc.)
+
+> If you have any issues, you can check if your environment is ready for the plugin with `:Als health` or `:checkhealth ada_ls`
+
 ## Features
 
+This plugin goes beyond standard LSP by providing:
+
 - Out-of-the-box ALS configuration (no nvim-lspconfig needed)
-- GPR project file support (LSP, Treesitter highlighting, Telescope picker)
+- GPR project file support
+- Scenario variable management for GPR projects
 - gprbuild integration via `:make`
 - Project view with optional [neo-tree](https://github.com/nvim-neo-tree/neo-tree.nvim) integration
 - Research on project source files via Telescope picker
@@ -72,22 +95,12 @@ automatically runs `require("nvim-treesitter").install("ada")`.
 
 ## Usage
 
-### Minimal ALS Setup
-
-1. Install the plugin and enable it with `opts = {}` or `require("ada_ls").setup()`
-2. Open an Ada file
-3. If no GPR project file is active yet, run `:Als pick_gpr`
-4. Verify the Neovim side with `:Als health` or `:checkhealth ada_ls`
-5. Build the current project with `:Als build`
-
-### Quick Start
-
 1. Open an Ada file in your project
 2. The plugin configures ALS automatically for Ada buffers
 3. Select a GPR project file if the current project is not active yet: `:Als pick_gpr`
 4. Build your project: `:Als build`
 
-If Telescope is installed, `:Als pick_gpr` uses a Telescope picker. Otherwise it falls back to `vim.ui.select()`.
+> If Telescope is installed, `:Als pick_gpr` uses a Telescope picker. Otherwise it falls back to `vim.ui.select()`.
 
 ### Commands
 
@@ -102,14 +115,17 @@ If Telescope is installed, `:Als pick_gpr` uses a Telescope picker. Otherwise it
 | `:Als health` | Open `:checkhealth ada_ls` |
 | `:Als other` | Go to corresponding .ads/.adb file |
 | `:Als pick_gpr` | Select GPR file via Telescope picker or `vim.ui.select()` fallback |
-| `:Als scenario_variables` | Select and update scenario variables (requires ALS 2027.0+) |
 
-#### Project View commands (ALS 2026.3+)
+#### Project View and Scenario Variables commands
+> requires Ada Language Server 2027.0+
+
 | Command | Description |
 |---------|-------------|
 | `:Als project_view` | Toggle project tree buffer and reveal current file when opening |
-| `:Als project_files` | Select source file via Telescope picker (requires Telescope) |
+| `:Als project_files` | Select source file via Telescope picker |
+| `:Als scenario_variables` | Select and update scenario variables |
 
+##### neo-tree setup
 Project View uses the builtin tree by default. To use the neo-tree backend, register the custom source in your neo-tree setup:
 
 ```lua
@@ -122,8 +138,6 @@ require("neo-tree").setup({
   },
 })
 ```
-
-With `project_view.backend = "auto"`, `ada_ls.nvim` uses neo-tree only when that source is registered. Otherwise it falls back to the builtin tree.
 
 #### Spark commands
 | Command | Description |
@@ -269,7 +283,7 @@ require("ada_ls").setup({
 | `show_runtime` | boolean | `false` | Show runtime project sources |
 
 When `backend = "auto"`, neo-tree is used only if `ada_ls.project_view.neo_tree`
-is registered in neo-tree's `sources` list. Otherwise the builtin project tree
+is registered in neo-tree's `sources` list (check the [neo-tree setup](#neo-tree-setup) section above). Otherwise the builtin project tree
 is used.
 
 ### SPARK Proof Levels
@@ -291,6 +305,36 @@ is used.
 | `report_all` | Report all checks (--report=all) |
 | `info` | Output info messages (--info) |
 | `proof_warnings` | Enable proof warnings (--proof-warnings=on) |
+
+
+## Compatibility & Limitations
+
+### Supported Versions
+
+| Component | Versions | Notes |
+|-----------|----------|-------|
+| Neovim | 0.11, 0.12, nightly | Tested regularly on 0.12 |
+| Ada Language Server | 2027.0+ |
+| GNAT | 12.0+ | Any recent GNAT version with gprbuild |
+| Treesitter Ada parser | Any | Auto-installed if nvim-treesitter is available |
+
+## Related Projects
+
+The Ada community has created several excellent tools for Neovim development. Here's how ada_ls.nvim fits into the ecosystem:
+
+- **[Ada Language Server (ALS)](https://github.com/AdaCore/ada_language_server)** — The core server that ada_ls.nvim wraps
+- **[gnattest.nvim](https://github.com/AdaCore/gnattest.nvim)** — Neovim plugin to support [GNATtest](https://github.com/AdaCore/gnattest) for test-driven development
+- **[Neovim Best Practices](https://github.com/lumen-oss/nvim-best-practices)** — Plugin development guidelines
+
+### Neovim Ecosystem Integration
+
+These plugins work great alongside ada_ls.nvim:
+
+- **[telescope.nvim](https://github.com/nvim-telescope/telescope.nvim)** — File and project picker (optional but recommended)
+- **[neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim)** — Project view backend (optional, uses builtin tree by default)
+- **[nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter)** — Nvim Treesitter configurations and abstraction layer
+- **[LuaSnip](https://github.com/L3MON4D3/LuaSnip)** — Snippet engine (optional, ada_ls.nvim provides VS Code-compatible snippets)
+- **[nvim-notify](https://github.com/rcarriga/nvim-notify)** — Enhanced notifications (optional, ada_ls.nvim gracefully degrades to echo)
 
 ## License
 

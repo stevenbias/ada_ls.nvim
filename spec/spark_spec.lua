@@ -535,6 +535,55 @@ other.ads:5:1: error: cannot prove precondition
           assert.equals("/abs/path/file.adb", qf_opts.items[1].filename)
         end)
 
+        it(
+          "resolves basenames in project and external source directories",
+          function()
+            local get_src_dirs = stub.new()
+            package.loaded["ada_ls.lsp_cmd"] = { get_src_dirs = get_src_dirs }
+            vim.fn.filereadable = function(path)
+              return (
+                path == "/project/src/main.adb" or path == "/shared/other.ads"
+              )
+                  and 1
+                or 0
+            end
+            spark._populate_quickfix(
+              "main.adb:10:5: info: range check proved\nother.ads:5:1: info: postcondition proved\n",
+              "/project",
+              { "src", { name = "shared", uri = "file:///shared" } }
+            )
+
+            local items = vim.fn.setqflist.calls[1].vals[3].items
+            assert.equals("/project/src/main.adb", items[1].filename)
+            assert.equals("/shared/other.ads", items[2].filename)
+            assert.equals(10, items[1].lnum)
+            assert.equals(5, items[1].col)
+            assert.stub(get_src_dirs).was_not_called()
+          end
+        )
+
+        it(
+          "keeps the relative diagnostic path when ALS sources are unavailable",
+          function()
+            package.loaded["ada_ls.lsp_cmd"] = {
+              get_src_dirs = function()
+                return nil, "No client"
+              end,
+            }
+            vim.fn.filereadable = function()
+              return 0
+            end
+            spark._populate_quickfix(
+              "missing.adb:3:2: medium: check might fail\n",
+              "/project"
+            )
+
+            local item = vim.fn.setqflist.calls[1].vals[3].items[1]
+            assert.equals("/project/missing.adb", item.filename)
+            assert.equals("W", item.type)
+          end
+        )
+
         it("opens quickfix when items present", function()
           local output = "main.adb:1:1: info: test\n"
           spark._populate_quickfix(output, "/project")
@@ -925,6 +974,47 @@ other.ads:5:1: error: cannot prove precondition
         local call_args = vim.system.calls[1].vals
         assert.equals("gnatprove", call_args[1][1])
       end)
+
+      it("passes scenario variables before -cargs", function()
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, params, callback)
+            if params.command == "als-project-file" then
+              callback(nil, "file:///project/root/test.gpr")
+            elseif params.command == "als-scenario-variables-information" then
+              callback(nil, {
+                variables = { { name = "MODE", value = "release" } },
+              })
+            elseif params.command == "als-source-dirs" then
+              callback(nil, {})
+            else
+              callback(nil, nil)
+            end
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.stub(vim.system).was_called()
+        local cmd = vim.system.calls[1].vals[1]
+        local scenario_idx
+        local cargs_idx
+
+        for i, arg in ipairs(cmd) do
+          if arg == "-XMODE=release" then
+            scenario_idx = i
+          elseif arg == "-cargs" then
+            cargs_idx = i
+          end
+        end
+
+        assert.is_not_nil(scenario_idx)
+        assert.is_not_nil(cargs_idx)
+        assert.is_true(scenario_idx < cargs_idx)
+      end)
     end)
 
     describe("prove_file", function()
@@ -963,9 +1053,13 @@ other.ads:5:1: error: cannot prove precondition
 
     describe("clean", function()
       it("calls gnatprove with --clean", function()
+        local source_requests = 0
         local mock_client = common.create_lsp_client({
           root_dir = "/project/root",
-          request = function(_self, _method, _params, callback)
+          request = function(_self, _method, params, callback)
+            if params.command == "als-source-dirs" then
+              source_requests = source_requests + 1
+            end
             callback(nil, "file:///project/root/test.gpr")
           end,
         })
@@ -986,6 +1080,7 @@ other.ads:5:1: error: cannot prove precondition
           end
         end
         assert.is_true(found_clean)
+        assert.equals(0, source_requests)
       end)
     end)
 
@@ -1034,6 +1129,73 @@ other.ads:5:1: error: cannot prove precondition
     end)
 
     describe("gnatprove async callbacks", function()
+      for _, sources_available in ipairs({ true, false }) do
+        it(
+          sources_available
+              and "keeps originating source directories after a project switch"
+            or "keeps the original cwd when sources are unavailable after a project switch",
+          function()
+            local source_requests = { ["/A"] = 0, ["/B"] = 0 }
+            local function request(client, _method, params, callback)
+              if params.command == "als-source-dirs" then
+                local root = client.root_dir
+                source_requests[root] = source_requests[root] + 1
+                if root == "/A" and not sources_available then
+                  callback({ message = "Source directories unavailable" }, nil)
+                else
+                  callback(nil, {
+                    { name = "src", uri = "file://" .. root .. "/src" },
+                  })
+                end
+              elseif params.command == "als-project-file" then
+                callback(nil, "file://" .. client.root_dir .. "/test.gpr")
+              end
+            end
+            local client_a = common.create_lsp_client({
+              root_dir = "/A",
+              request = request,
+            })
+            local client_b = common.create_lsp_client({
+              root_dir = "/B",
+              request = request,
+            })
+            common.setup_lsp_client(client_a)
+            local captured_callback
+            rawset(vim, "system", function(_cmd, opts, callback)
+              assert.equals("/A", opts.cwd)
+              assert.equals(1, source_requests["/A"])
+              captured_callback = callback
+            end)
+            vim.fn.filereadable = function(path)
+              return (path == "/A/src/main.adb" or path == "/B/src/main.adb")
+                  and 1
+                or 0
+            end
+
+            spark.prove()
+            assert.is_function(captured_callback)
+
+            common.setup_lsp_client(client_b)
+            vim.fn.getcwd = function()
+              return "/B"
+            end
+            captured_callback({
+              code = 0,
+              stdout = "main.adb:10:5: info: range check proved\n",
+              stderr = "",
+            })
+
+            local item = vim.fn.setqflist.calls[1].vals[3].items[1]
+            assert.equals(
+              sources_available and "/A/src/main.adb" or "/A/main.adb",
+              item.filename
+            )
+            assert.equals(1, source_requests["/A"])
+            assert.equals(0, source_requests["/B"])
+          end
+        )
+      end
+
       it("notifies success when gnatprove returns code 0", function()
         local captured_callback
         rawset(vim, "system", function(_cmd, _opts, callback)

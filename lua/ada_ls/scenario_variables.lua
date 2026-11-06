@@ -67,9 +67,14 @@ function M.set_variable()
   vim.cmd.redraw() -- Redraw the screen to clear the inputlist prompt
 
   local possible_values = scenario_variables[names[idx]].possible_values
+  local value_items = {}
+  for value_idx, value in ipairs(possible_values) do
+    table.insert(value_items, value_idx .. " - " .. value)
+  end
+
   local idx_val = vim.fn.inputlist({
     "Select value for " .. names[idx] .. ":",
-    table.concat(possible_values, "\n"),
+    table.concat(value_items, "\n"),
   })
 
   if idx_val < 1 or idx_val > #possible_values then

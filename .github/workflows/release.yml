@@ -1,22 +1,29 @@
 name: Release
 on:
+  pull_request:
+    branches: [main]
+    types: [closed]
   workflow_run:
-    workflows: [Publish to LuaRocks]
+    workflows: [Publish to LuaRocks v2]
     types: [completed]
 permissions:
   contents: write
+  pull-requests: read
+  statuses: read
+concurrency:
+  group: release-${{ github.event.pull_request.head.ref || github.event.workflow_run.display_title }}
+  cancel-in-progress: false
 jobs:
   release:
     name: Create Release & Cleanup
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.display_title, 'release/'))
     runs-on: ubuntu-latest
     steps:
-      - name: Validate release branch
-        run: |
-          BRANCH="${{ github.event.workflow_run.head_branch }}"
-          if [[ ! "$BRANCH" =~ ^release/ ]]; then
-            echo "Not a release branch ($BRANCH), skipping release"
-            exit 78
-          fi
       - name: Checkout main
         uses: actions/checkout@v4
         with:
@@ -27,15 +34,36 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-      - name: Extract version
+      - name: Check merged PR and successful publication
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ github.event.pull_request.head.ref || github.event.workflow_run.display_title }}
         run: |
-          RELEASE_BRANCH="${{ github.event.workflow_run.head_branch }}"
+          [[ "$RELEASE_BRANCH" =~ ^release/v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           FINAL_TAG="${RELEASE_BRANCH#release/}"
-          echo "final_tag=${FINAL_TAG}" >> "$GITHUB_OUTPUT"
-          echo "release_branch=${RELEASE_BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "Final tag: ${FINAL_TAG}"
+          if ! RELEASE_SHA=$(git rev-parse --verify "refs/tags/${FINAL_TAG}^{commit}"); then
+            echo "Waiting for final tag"
+            exit 0
+          fi
+          MERGED_SHA=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
+            -f state=closed -f base=main -f "head=${GITHUB_REPOSITORY_OWNER}:${RELEASE_BRANCH}" \
+            --jq '[.[] | select(.merged_at != null)][0].head.sha // empty')
+          if [[ -n "$MERGED_SHA" && "$MERGED_SHA" != "$RELEASE_SHA" ]]; then
+            echo "::error::Merged PR commit $MERGED_SHA does not match $FINAL_TAG ($RELEASE_SHA)"
+            exit 1
+          fi
+          PUBLISHED=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/status" \
+            --jq '[.statuses[] | select(.context == "ada-ls/luarocks-publish")][0].state // empty')
+          if [[ -z "$MERGED_SHA" || "$PUBLISHED" != success ]]; then
+            echo "Waiting for merge and successful publication of $FINAL_TAG"
+            exit 0
+          fi
+          echo "final_tag=$FINAL_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_branch=$RELEASE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
       - name: Create GitHub release
+        if: steps.version.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -48,13 +76,15 @@ jobs:
               --latest
           fi
       - name: Merge release branch into dev
+        if: steps.version.outputs.ready == 'true'
         run: |
           git fetch origin dev
           git checkout dev
-          git merge origin/${{ steps.version.outputs.release_branch }} --no-edit \
+          git merge "${{ steps.version.outputs.final_tag }}" --no-edit \
             -m "Merge ${{ steps.version.outputs.release_branch }} into dev"
           git push origin dev
       - name: Delete release branch
+        if: steps.version.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
