@@ -974,6 +974,47 @@ other.ads:5:1: error: cannot prove precondition
         local call_args = vim.system.calls[1].vals
         assert.equals("gnatprove", call_args[1][1])
       end)
+
+      it("passes scenario variables before -cargs", function()
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, params, callback)
+            if params.command == "als-project-file" then
+              callback(nil, "file:///project/root/test.gpr")
+            elseif params.command == "als-scenario-variables-information" then
+              callback(nil, {
+                variables = { { name = "MODE", value = "release" } },
+              })
+            elseif params.command == "als-source-dirs" then
+              callback(nil, {})
+            else
+              callback(nil, nil)
+            end
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.stub(vim.system).was_called()
+        local cmd = vim.system.calls[1].vals[1]
+        local scenario_idx
+        local cargs_idx
+
+        for i, arg in ipairs(cmd) do
+          if arg == "-XMODE=release" then
+            scenario_idx = i
+          elseif arg == "-cargs" then
+            cargs_idx = i
+          end
+        end
+
+        assert.is_not_nil(scenario_idx)
+        assert.is_not_nil(cargs_idx)
+        assert.is_true(scenario_idx < cargs_idx)
+      end)
     end)
 
     describe("prove_file", function()

@@ -65,6 +65,30 @@ local function build_args(kind, state)
   return args
 end
 
+local function scenario_variables_to_args(scenario_variables_info)
+  local args = {}
+  local variables =
+    type(scenario_variables_info) == "table" and scenario_variables_info.variables
+      or nil
+
+  if not vim.islist(variables) then
+    return args
+  end
+
+  for _, var in ipairs(variables) do
+    if
+      type(var) == "table"
+      and type(var.name) == "string"
+      and var.name ~= ""
+      and var.value ~= nil
+    then
+      table.insert(args, "-X" .. var.name .. "=" .. tostring(var.value))
+    end
+  end
+
+  return args
+end
+
 -- Parse gnatprove output and populate quickfix
 local function populate_quickfix(output, cwd, source_dirs)
   local qf_items = {}
@@ -166,6 +190,7 @@ local function run_gnatprove(kind, state)
 
   -- Add -cargs -gnatef for better error messages (except for clean)
   if kind ~= "clean" then
+    vim.list_extend(args, scenario_variables_to_args(lsp_cmd.get_scenario_variables_info()))
     table.insert(args, "-cargs")
     table.insert(args, "-gnatef")
   end
