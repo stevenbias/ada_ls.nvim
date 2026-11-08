@@ -33,6 +33,19 @@ describe("ada_ls.lsp_cmd", function()
       local result = lsp_cmd.get_root_dir()
       assert.equals("/my/project", result)
     end)
+
+    it(
+      "falls back to client.config.root_dir when root_dir is missing",
+      function()
+        local mock_client = common.create_lsp_client()
+        mock_client.root_dir = nil
+        mock_client.config = { root_dir = "/my/config/project" }
+        common.setup_lsp_client(mock_client)
+
+        local result = lsp_cmd.get_root_dir()
+        assert.equals("/my/config/project", result)
+      end
+    )
   end)
 
   describe("get_symbols", function()
@@ -94,7 +107,7 @@ describe("ada_ls.lsp_cmd", function()
   end)
 
   describe("get_prj_dependencies", function()
-    it("returns nil when no project file", function()
+    it("returns nil when project file is nil", function()
       local mock_client = common.create_lsp_client({
         request = function(_self, _method, _params, callback)
           callback(nil, nil)
@@ -102,33 +115,23 @@ describe("ada_ls.lsp_cmd", function()
       })
       common.setup_lsp_client(mock_client)
 
-      local result, err = lsp_cmd.get_prj_dependencies()
+      local result, err = lsp_cmd.get_prj_dependencies(nil)
       assert.is_nil(result)
-      assert.matches("No project file", err)
+      assert.is_nil(err)
     end)
 
     it("returns dependencies when project file exists", function()
-      local call_count = 0
       local mock_client = common.create_lsp_client({
-        request = function(_self, method, _params, callback)
-          call_count = call_count + 1
-          if method == "workspace/executeCommand" then
-            if call_count == 1 then
-              -- First call: als-project-file
-              callback(nil, "/project/main.gpr")
-            else
-              -- Second call: als-gpr-dependencies
-              callback(nil, {
-                { uri = "file:///project/lib1.gpr" },
-                { uri = "file:///project/lib2.gpr" },
-              })
-            end
-          end
+        request = function(_self, _method, _params, callback)
+          callback(nil, {
+            { uri = "file:///project/lib1.gpr" },
+            { uri = "file:///project/lib2.gpr" },
+          })
         end,
       })
       common.setup_lsp_client(mock_client)
 
-      local result, err = lsp_cmd.get_prj_dependencies()
+      local result, err = lsp_cmd.get_prj_dependencies("/project/main.gpr")
       assert.is_nil(err)
       assert.is_table(result)
       assert.equals(2, #result)
@@ -238,6 +241,51 @@ describe("ada_ls.lsp_cmd", function()
       assert.equals("/path/to/project.gpr", result)
     end)
 
+    it("omits arguments for commands without args", function()
+      local captured_method
+      local captured_params
+      local mock_client = common.create_lsp_client({
+        request = function(_self, method, params, callback)
+          captured_method = method
+          captured_params = params
+          callback(nil, "/path/to/project.gpr")
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.send_command("als-project-file")
+
+      assert.is_nil(err)
+      assert.equals("/path/to/project.gpr", result)
+      assert.equals("workspace/executeCommand", captured_method)
+      assert.same({ command = "als-project-file" }, captured_params)
+      assert.is_nil(captured_params.arguments)
+    end)
+
+    it("wraps command args in a single-element arguments array", function()
+      local captured_params
+      local mock_client = common.create_lsp_client({
+        request = function(_self, _method, params, callback)
+          captured_params = params
+          callback(nil, "ok")
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local arg = {
+        uri = "file:///project/main.gpr",
+        direction = 1,
+      }
+      local result, err = lsp_cmd.send_command("als-gpr-dependencies", arg)
+
+      assert.is_nil(err)
+      assert.equals("ok", result)
+      assert.same({
+        command = "als-gpr-dependencies",
+        arguments = { arg },
+      }, captured_params)
+    end)
+
     it("returns error when command fails", function()
       local mock_client = common.create_lsp_client({
         request = function(_self, _method, _params, callback)
@@ -249,6 +297,79 @@ describe("ada_ls.lsp_cmd", function()
       local result, err = lsp_cmd.send_command("als-invalid-command")
       assert.is_nil(result)
       assert.equals("Command not found", err)
+    end)
+  end)
+
+  describe("get_scenario_variables_info", function()
+    it("returns scenario variables info on success", function()
+      local response = {
+        variables = {
+          {
+            name = "MODE",
+            value = "debug",
+            ["possible-values"] = { "debug", "release" },
+          },
+        },
+      }
+      local mock_client = common.create_lsp_client({
+        request = function(_self, _method, _params, callback)
+          callback(nil, response)
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.get_scenario_variables_info()
+
+      assert.is_nil(err)
+      assert.same(response, result)
+    end)
+
+    it("returns nil and error when LSP command fails", function()
+      local mock_client = common.create_lsp_client({
+        request = function(_self, _method, _params, callback)
+          callback("Command not supported", nil)
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.get_scenario_variables_info()
+
+      assert.is_nil(result)
+      assert.equals("Command not supported", err)
+    end)
+
+    it("sends command with no timeout specified", function()
+      local captured_call = {}
+      local mock_client = common.create_lsp_client({
+        request = function(_self, method, params, callback)
+          captured_call = { method = method, params = params }
+          callback(nil, { variables = {} })
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      lsp_cmd.get_scenario_variables_info()
+
+      assert.equals(
+        "als-scenario-variables-information",
+        captured_call.params.command
+      )
+      assert.is_nil(captured_call.params.arguments)
+    end)
+
+    it("returns empty variables list when LSP returns no variables", function()
+      local response = { variables = {} }
+      local mock_client = common.create_lsp_client({
+        request = function(_self, _method, _params, callback)
+          callback(nil, response)
+        end,
+      })
+      common.setup_lsp_client(mock_client)
+
+      local result, err = lsp_cmd.get_scenario_variables_info()
+
+      assert.is_nil(err)
+      assert.same({ variables = {} }, result)
     end)
   end)
 end)

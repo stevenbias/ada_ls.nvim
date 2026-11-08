@@ -1,3 +1,81 @@
+## v0.3.0-rc.0 (2026-11-08)
+
+### BREAKING CHANGE
+
+- Remove select_options() and :Als project_view_options
+command. Configure options via setup() instead.
+
+### Feat
+
+- **scenario_variables**: Add a command to support scenario variables
+- **project**: Get scenario variables from json file and keep their values after new gpr file picked
+- Add the bare Als command to show a summary on how to use the plugin
+- **ada_ls**: Add a subcommand to format current buffer
+- **project-view**: Include collapsed obj dir files in filter results
+- Improve neo-tree project view rendering
+- add neo-tree backend for project view
+- **project_view**: add Project View feature for ALS 2026.3+
+- **lsp**: add get_project_view_info command
+- Add new support for refactor code actions
+- Improve support for gpr files
+- Remove <leader>aj mapping in normal and insert mode
+- Add a timeout parameter to lsp command and requests
+
+### Fix
+
+- pass scenario variables to gnatprove invocation
+- gate release merges on publish completion
+- set tag ref overrides for luarocks publish
+- Use correct path for proof result in context of project change
+- Remove recompute of the .als.json file after selection of the gpr file
+- **project**: Fix regression on adding scenario variables when a gpr file is picked
+- **gprtools**: Correct errorformat
+- **project_view**: Prevent Neo-tree duplicate node IDs
+- **utils**: restart gpr_ls correctly from .als.json write flow
+- Correct the way to check if ada_ls is registered as sources for neo-tree
+- Check ada_project has been registered as a neo-tree source before using neo-tree
+- Expand object directories in project view
+- invalidate project view cache when GPR file changes
+- On setup, do not overwrite als.json file if it exists
+- save_new_configuration
+- get_prj_dependencies
+- set makeprg for ada project
+
+### Refactor
+
+- Modif code review
+- Improve performance
+- Improve scenario variables support
+- Improve performance to edit scenario variables
+- Add treesitter as dependency and install ada parser at setup
+- Remove summary after checkhealth in health command
+- Improve checkhealth for this plugin
+- **project_view**: Share node builders
+- **utils**: Language server detection
+- **project**: Improve the management of gpr file after selection
+- Harden SPARK execution, project parsing, and root detection
+- Improve ada/gpr ls refresh
+- Improve filtering with builtin backend
+- Add a nodes module for project tree
+- Modif before PR
+- Remove useless :Als reveal command
+- simplify project_view with graceful fallback
+- streamline project_view code and fix icon spacing
+- extract get_relative_path to utils
+- Do not move to the body file after a body generation
+- Code review
+- Fix typo
+- Reset als command
+- Use returned err in notif
+- update als project file
+- Always search gpr files upward and downward
+- Always search gpr files upward and downward
+- Rename "gpr" module to "gprtools" module
+- Refactor and remove the absolute path to the GPR file in .als.json file
+- Modif get_subprogram_name_from_line signature
+
+## v0.2.0 (2026-05-16)
+
 ## v0.2.0-rc.3 (2026-05-17)
 
 ## v0.2.0-rc.2 (2026-05-16)

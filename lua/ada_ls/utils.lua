@@ -1,5 +1,6 @@
 local M = {
   als = nil,
+  json_file = nil,
   plugin_name = "Ada_ls",
   server_project_name = nil,
 }
@@ -38,22 +39,59 @@ function M.get_bufdir()
   return vim.fs.dirname(M.get_bufpath())
 end
 
-function M.get_ada_ls()
-  if M.als ~= nil then
-    return M.als
+local function get_als_clients(opts)
+  opts = opts or {}
+  local client_names = { "ada_ls", "gpr_ls" }
+
+  for _, name in ipairs(client_names) do
+    local query = { name = name }
+    if opts.bufnr ~= nil then
+      query.bufnr = opts.bufnr
+    end
+
+    local clients = vim.lsp.get_clients(query)
+    if clients and #clients > 0 then
+      return clients, name
+    end
   end
 
-  local clients = vim.lsp.get_clients({ name = "ada_ls" })
-  if not clients or #clients == 0 then
+  return nil, nil
+end
+
+function M.get_ada_ls()
+  local bufid = M.get_bufid()
+  local clients = get_als_clients({ bufnr = bufid })
+
+  if not clients then
     return nil, "Ada LSP client not found"
-  else
-    M.als = clients[1]
-    return M.als
   end
+
+  M.als = clients[1]
+  return M.als
+end
+
+local function get_active_ada_client_name()
+  local bufid = M.get_bufid()
+  local _, name = get_als_clients({ bufnr = bufid })
+  if name then
+    return name
+  end
+
+  _, name = get_als_clients()
+  if name then
+    return name
+  end
+
+  return "ada_ls"
 end
 
 function M.get_conf_file()
-  local root_dir = require("ada_ls.lsp_cmd").get_root_dir()
+  local ok, lsp_cmd = pcall(require, "ada_ls.lsp_cmd")
+  if not ok or type(lsp_cmd.get_root_dir) ~= "function" then
+    return nil
+  end
+
+  local root_dir = lsp_cmd.get_root_dir()
   if root_dir == nil then
     return nil
   end
@@ -79,21 +117,19 @@ function M.get_subprogram_name_from_line(lnum)
         range
         and range.start
         and range["end"]
-        and range.start.line + 1 == lnum
-      then
-        return child.name
-      elseif
-        range
-        and range.start
-        and range["end"]
-        and range.start.line + 1 < lnum
+        and range.start.line + 1 <= lnum
         and lnum <= range["end"].line + 1
       then
-        range = child.selectionRange
         return child.name,
           {
-            tonumber(range.start.line + 1),
-            tonumber(range.start.character + 1),
+            start = {
+              line = tonumber(range.start.line + 1),
+              character = tonumber(range.start.character + 1),
+            },
+            end_ = {
+              line = tonumber(range["end"].line + 1),
+              character = tonumber(range["end"].character + 1),
+            },
           }
       end
     end
@@ -113,35 +149,112 @@ local function set_server_project_name(params)
   end
 end
 
+local function set_json_file()
+  local conf_file = M.get_conf_file()
+  if conf_file then
+    M.json_file = conf_file
+  end
+end
+
 function M.get_server_project_name()
   return M.server_project_name
 end
 
-function M.notify_server(method, params)
+function M.get_json_file()
+  return M.json_file
+end
+
+function M.notify_server(method, params, skip_json_file)
   local client = M.get_ada_ls()
   if client ~= nil then
     set_server_project_name(params)
+    if not skip_json_file then
+      set_json_file()
+    end
     return client:notify(method, params)
   end
   return false
 end
 
 function M.reset_als_client()
+  local client_name = get_active_ada_client_name()
   M.clear()
-  for _, client in pairs(vim.lsp.get_clients({ name = "ada_ls" })) do
-    client.stop(client, true)
+  if vim.fn.has("nvim-0.12") ~= 1 then
+    M.notify(
+      "Please restart Ada_ls manually after changing the .als.json file.\n"
+        .. "Automatic restart is only supported in Neovim 0.12 and later.",
+      vim.log.levels.WARN
+    )
+    return
   end
-  vim.cmd("e") -- Reopen buffer to trigger LSP attach
+  vim.cmd("lsp restart " .. client_name)
 end
 
 function M.clear()
   M.als = nil
+  M.json_file = nil
   M.server_project_name = nil
+end
+
+--- Normalize a path by stripping trailing slashes
+---@param path string
+---@return string
+function M.normalize_path(path)
+  if not path or path == "" then
+    return ""
+  end
+  -- Strip trailing slashes (but keep root "/" intact)
+  return path:gsub("/+$", "")
+end
+
+--- Get basename safely, handling trailing slashes
+---@param path string
+---@return string
+function M.safe_basename(path)
+  if not path or path == "" then
+    return ""
+  end
+  return vim.fs.basename(M.normalize_path(path)) or ""
+end
+
+--- Get path relative to a base directory
+--- Returns the relative path if inside base, or basename as fallback
+---@param path string The full path
+---@param base_dir string The base directory to compute relative path from
+---@return string The relative path or basename
+function M.get_relative_path(path, base_dir)
+  if not path or path == "" then
+    return ""
+  end
+  if not base_dir or base_dir == "" then
+    local normalized = path:gsub("/+$", "")
+    return vim.fs.basename(normalized) or ""
+  end
+
+  -- Normalize paths (strip trailing slashes)
+  local norm_path = path:gsub("/+$", "")
+  local norm_base = base_dir:gsub("/+$", "")
+
+  -- Check if path is base_dir itself or a child of base_dir
+  if
+    norm_path == norm_base
+    or norm_path:sub(1, #norm_base + 1) == norm_base .. "/"
+  then
+    local relative = norm_path:sub(#norm_base + 1):gsub("^/", "")
+    if relative == "" then
+      return "."
+    end
+    return relative
+  end
+
+  -- Path is outside base directory - show basename as fallback
+  return vim.fs.basename(norm_path) or ""
 end
 
 -- Test-specific exports - only exposed in test mode
 if os.getenv("ADA_LS_TEST_MODE") then
   M._log_lvl_tostring = log_lvl_tostring
+  M._get_ada_clients = get_als_clients
 end
 
 return M

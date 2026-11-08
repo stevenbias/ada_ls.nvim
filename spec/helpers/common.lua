@@ -3,6 +3,21 @@ local stub = require("luassert.stub")
 
 local M = {}
 
+local function shell_escape(path)
+  return '"' .. tostring(path):gsub('"', '\\"') .. '"'
+end
+
+local function is_directory_path(path)
+  local result = os.execute("test -d " .. shell_escape(path))
+  if type(result) == "number" then
+    return result == 0
+  end
+  if type(result) == "boolean" then
+    return result
+  end
+  return false
+end
+
 -- Package cleanup (reset module state between tests)
 function M.cleanup_packages()
   -- Clear preloads first
@@ -10,19 +25,41 @@ function M.cleanup_packages()
   package.preload["ada_ls.utils"] = nil
   package.preload["ada_ls.lsp_cmd"] = nil
   package.preload["ada_ls.project"] = nil
-  package.preload["ada_ls.gpr"] = nil
+  package.preload["ada_ls.gprtools"] = nil
   package.preload["ada_ls.spark"] = nil
   package.preload["ada_ls.spark.config"] = nil
   package.preload["ada_ls.lspconfig"] = nil
+  package.preload["ada_ls.refactoring"] = nil
+  package.preload["ada_ls.scenario_variables"] = nil
+  package.preload["ada_ls.project_view"] = nil
+  package.preload["ada_ls.project_view.data"] = nil
+  package.preload["ada_ls.project_view.telescope"] = nil
+  package.preload["ada_ls.project_view.tree"] = nil
+  package.preload["ada_ls.project_view.neo_tree"] = nil
+  package.preload["ada_ls.project_view.neo_tree.items"] = nil
+  package.preload["ada_ls.project_view.neo_tree.commands"] = nil
+  package.preload["ada_ls.project_view.neo_tree.components"] = nil
+  package.preload["neo-tree"] = nil
   -- Then clear loaded modules
   package.loaded["ada_ls"] = nil
   package.loaded["ada_ls.utils"] = nil
   package.loaded["ada_ls.lsp_cmd"] = nil
   package.loaded["ada_ls.project"] = nil
-  package.loaded["ada_ls.gpr"] = nil
+  package.loaded["ada_ls.gprtools"] = nil
   package.loaded["ada_ls.spark"] = nil
   package.loaded["ada_ls.spark.config"] = nil
   package.loaded["ada_ls.lspconfig"] = nil
+  package.loaded["ada_ls.refactoring"] = nil
+  package.loaded["ada_ls.scenario_variables"] = nil
+  package.loaded["ada_ls.project_view"] = nil
+  package.loaded["ada_ls.project_view.data"] = nil
+  package.loaded["ada_ls.project_view.telescope"] = nil
+  package.loaded["ada_ls.project_view.tree"] = nil
+  package.loaded["ada_ls.project_view.neo_tree"] = nil
+  package.loaded["ada_ls.project_view.neo_tree.items"] = nil
+  package.loaded["ada_ls.project_view.neo_tree.commands"] = nil
+  package.loaded["ada_ls.project_view.neo_tree.components"] = nil
+  package.loaded["neo-tree"] = nil
 end
 
 -- Vim API mocking
@@ -42,6 +79,10 @@ function M.create_basic_vim_api(custom_api)
     nvim_create_augroup = function()
       return 1
     end,
+    nvim_create_namespace = function()
+      return 1
+    end,
+    nvim_set_current_dir = stub.new(),
     nvim_buf_set_option = stub.new(),
     nvim_set_option_value = stub.new(),
     nvim__get_runtime = function()
@@ -73,8 +114,25 @@ function M.create_vim_fn_mock(overrides)
     filereadable = function()
       return 1
     end,
-    isdirectory = function()
-      return 0
+    isdirectory = function(path)
+      return is_directory_path(path) and 1 or 0
+    end,
+    stdpath = function(what)
+      -- Return reasonable test paths for common stdpath queries
+      if what == "config" then
+        return "/home/test/.config/nvim"
+      elseif what == "data" then
+        return "/home/test/.local/share/nvim"
+      elseif what == "cache" then
+        return "/home/test/.cache/nvim"
+      elseif what == "state" then
+        return "/home/test/.local/state/nvim"
+      end
+      return "/test/nvim/" .. what
+    end,
+    mkdir = function(path, _flags)
+      local ok = os.execute('mkdir -p "' .. path .. '"')
+      return ok and 1 or 0
     end,
   }
 
@@ -102,7 +160,8 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
   rawset(vim, "api", M.create_basic_vim_api(custom_api))
 
   -- Set up vim.fn
-  rawset(vim, "fn", M.create_vim_fn_mock(custom_fn))
+  local vim_fn = M.create_vim_fn_mock(custom_fn)
+  rawset(vim, "fn", vim_fn)
 
   -- Set up other vim globals using rawset
   rawset(vim, "log", {
@@ -123,6 +182,24 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
       return nil
     end
     return uri:gsub("^file://", "")
+  end)
+  rawset(vim, "uri_from_fname", function(fname)
+    if not fname then
+      return nil
+    end
+    return "file://" .. fname
+  end)
+
+  -- Set up vim.deepcopy
+  rawset(vim, "deepcopy", function(t)
+    if type(t) ~= "table" then
+      return t
+    end
+    local copy = {}
+    for k, v in pairs(t) do
+      copy[k] = vim.deepcopy(v)
+    end
+    return copy
   end)
 
   -- Set up vim.islist
@@ -152,6 +229,38 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
     joinpath = function(...)
       return table.concat({ ... }, "/")
     end,
+    dir = function(path)
+      local p = io.popen(
+        "ls -A1 --group-directories-first "
+          .. shell_escape(path)
+          .. " 2>/dev/null"
+      )
+      if not p then
+        return function()
+          return nil
+        end
+      end
+
+      local entries = {}
+      for name in p:lines() do
+        local full_path = path .. "/" .. name
+        table.insert(entries, {
+          name = name,
+          type = vim_fn.isdirectory(full_path) == 1 and "directory" or "file",
+        })
+      end
+      p:close()
+
+      local index = 0
+      return function()
+        index = index + 1
+        local entry = entries[index]
+        if not entry then
+          return nil
+        end
+        return entry.name, entry.type
+      end
+    end,
   })
 
   -- Set up vim.json
@@ -180,6 +289,30 @@ function M.setup_vim_globals(custom_api, custom_fn, custom_other)
       return {}
     end,
   })
+
+  -- Set up vim.hl for integration tests (required by telescope)
+  rawset(vim, "hl", {
+    highlight = stub.new(),
+  })
+
+  -- Set up vim.tbl_deep_extend
+  rawset(vim, "tbl_deep_extend", function(_behavior, tbl1, tbl2)
+    local result = {}
+    for k, v in pairs(tbl1) do
+      result[k] = v
+    end
+    for k, v in pairs(tbl2) do
+      result[k] = v
+    end
+    return result
+  end)
+
+  -- Set up vim.schedule for async operations (executes immediately in tests)
+  rawset(vim, "schedule", function(fn)
+    if type(fn) == "function" then
+      fn()
+    end
+  end)
 
   if custom_other then
     for k, v in pairs(custom_other) do
@@ -254,6 +387,307 @@ end
 
 function M.mock_symbols(children)
   return { { children = children } }
+end
+
+-- Mock ada_ls.utils with configurable options
+---@param opts? { conf_file?: string, server_project?: string }
+function M.setup_utils_mock(opts)
+  opts = opts or {}
+  rawset(package.loaded, "ada_ls.utils", {
+    get_json_file = function()
+      return opts.json_file or opts.conf_file
+    end,
+    get_conf_file = function()
+      return opts.conf_file
+    end,
+    get_server_project_name = function()
+      return opts.server_project
+    end,
+    notify = stub.new(),
+    notify_server = stub.new(),
+  })
+end
+
+-- Search through stub calls for a matching pattern
+---@param stub_obj table The stub to search
+---@param pattern string Lua pattern to match against first argument
+---@return boolean found Whether a match was found
+function M.find_stub_call(stub_obj, pattern)
+  if not stub_obj.calls then
+    return false
+  end
+  for _, call in ipairs(stub_obj.calls) do
+    if call.vals[1] and call.vals[1]:match(pattern) then
+      return true
+    end
+  end
+  return false
+end
+
+-- Create a temporary file with content, returns path and cleanup function
+---@param content string File content
+---@param ext? string File extension (default: none)
+---@return string path, function cleanup
+function M.create_temp_file(content, ext)
+  local path = os.tmpname() .. (ext or "")
+  local file = io.open(path, "w")
+  file:write(content)
+  file:close()
+  return path, function()
+    os.remove(path)
+  end
+end
+
+-- Setup all vim mocks needed for spark/ui tests
+function M.setup_spark_ui_mocks()
+  rawset(vim, "fn", {
+    inputlist = function()
+      return 2
+    end,
+    len = function(t)
+      return #t
+    end,
+  })
+  rawset(vim, "o", { lines = 100, columns = 200 })
+  rawset(vim, "api", {
+    nvim_create_buf = stub.new().returns(1),
+    nvim_buf_set_lines = stub.new(),
+    nvim_open_win = stub.new().returns(2),
+    nvim_win_set_cursor = stub.new(),
+    nvim_win_get_cursor = stub.new().returns({ 3, 0 }),
+    nvim_win_close = stub.new(),
+    nvim_create_autocmd = stub.new(),
+    nvim__get_runtime = function()
+      return {}
+    end,
+  })
+  local bo = {}
+  setmetatable(bo, {
+    __index = function()
+      return {}
+    end,
+    __newindex = function() end,
+  })
+  rawset(vim, "bo", bo)
+
+  -- Return captured callbacks for test assertions
+  local captured = { cr_callback = nil, q_callback = nil }
+  rawset(vim, "keymap", {
+    set = function(_, key, fn, _)
+      if key == "<CR>" then
+        captured.cr_callback = fn
+      elseif key == "q" then
+        captured.q_callback = fn
+      end
+    end,
+  })
+  return captured
+end
+
+-- Setup mock for ada_ls.spark module
+---@param opts? { proof_level?: number, options?: table }
+function M.setup_spark_mock(opts)
+  opts = opts or {}
+  local mock = {
+    load_state = function()
+      return {
+        proof_level = opts.proof_level or 0,
+        options = opts.options or {},
+      }
+    end,
+    save_state = stub.new(),
+  }
+  rawset(package.loaded, "ada_ls.spark", mock)
+  return mock
+end
+
+-- Create a mock ALS project view response
+---@param opts? { root_name?: string, projects?: table[], runtime?: table }
+---@return table
+function M.create_project_view_response(opts)
+  opts = opts or {}
+  local root_name = opts.root_name or "main_project"
+  local root_id = opts.root_id or "proj_" .. root_name
+
+  -- Default project entry
+  local default_project = {
+    project = {
+      id = root_id,
+      name = root_name,
+      kind = "standard",
+      qualifier = "default",
+      ["simple-name"] = root_name .. ".gpr",
+      ["file-name"] = "/project/" .. root_name .. ".gpr",
+      directory = "/project",
+      ["is-externally-built"] = false,
+      languages = { "ada" },
+      ["source-directories"] = { "/project/src" },
+      ["object-directory"] = "/project/obj",
+    },
+    imports = {},
+    aggregated = {},
+    extended = {},
+    ["imported-by"] = {},
+    sources = {
+      {
+        ["file-name"] = "/project/src/main.adb",
+        ["simple-name"] = "main.adb",
+        directory = "/project/src",
+        language = "ada",
+      },
+      {
+        ["file-name"] = "/project/src/utils.ads",
+        ["simple-name"] = "utils.ads",
+        directory = "/project/src",
+        language = "ada",
+      },
+    },
+  }
+
+  local projects = opts.projects or { default_project }
+
+  local response = {
+    tree = {
+      ["root-project"] = { id = root_id },
+    },
+    projects = projects,
+  }
+
+  if opts.runtime then
+    response["runtime-project"] = opts.runtime
+  end
+
+  return response
+end
+
+-- Setup mock for lsp_cmd with project view support
+---@param response? table ALS response (nil = command not supported)
+---@param err? string Error message
+function M.setup_lsp_cmd_project_view_mock(response, err)
+  local mock = {
+    get_project_view_info = function()
+      if err then
+        return nil, err
+      end
+      return response
+    end,
+    get_root_dir = function()
+      return "/project"
+    end,
+  }
+  rawset(package.loaded, "ada_ls.lsp_cmd", mock)
+  return mock
+end
+
+-- Create a complete lsp_cmd mock with all commonly needed functions
+---@param overrides? table Custom function implementations to override defaults
+---@return table mock
+function M.create_lsp_cmd_mock(overrides)
+  overrides = overrides or {}
+  local mock = {
+    get_prj_file = overrides.get_prj_file or function()
+      return "/project/default.gpr"
+    end,
+    get_prj_dependencies = overrides.get_prj_dependencies or function()
+      return nil
+    end,
+    get_root_dir = overrides.get_root_dir or function()
+      return "/project"
+    end,
+    get_scenario_variables_info = overrides.get_scenario_variables_info
+      or function()
+        return {
+          variables = {},
+        }
+      end,
+    get_project_view_info = overrides.get_project_view_info or function()
+      return nil, "Command not supported"
+    end,
+  }
+  rawset(package.loaded, "ada_ls.lsp_cmd", mock)
+  return mock
+end
+
+-- Optional dependency detection for Tier 2 tests
+---@return boolean
+function M.has_telescope()
+  return pcall(require, "telescope")
+end
+
+---@return boolean
+function M.has_neo_tree()
+  return pcall(require, "neo-tree")
+end
+
+--- Check if Telescope and its full environment are available for integration tests
+---@return boolean
+function M.has_telescope_full_environment()
+  local has_previewers = pcall(require, "telescope.previewers")
+  local has_pickers = pcall(require, "telescope.pickers")
+  return has_previewers and has_pickers
+end
+
+--- Check if Neo-tree and its full environment are available for integration tests
+---@return boolean
+function M.has_neo_tree_full_environment()
+  return M.has_neo_tree()
+end
+
+---@param module_name string
+---@return boolean ok, any result
+function M.require_optional(module_name)
+  return pcall(require, module_name)
+end
+
+--- Setup mocks for tree integration testing (vim.bo, vim.wo, data module)
+--- Returns mock_data for test to override fetch() behavior per test
+---@return table mock_data
+function M.setup_tree_integration_mocks()
+  -- Mock vim.bo with per-buffer options storage
+  vim.bo = setmetatable({}, {
+    __index = function(self, buf_id)
+      if not rawget(self, "_buffers") then
+        rawset(self, "_buffers", {})
+      end
+      local buffers = rawget(self, "_buffers")
+      if not buffers[buf_id] then
+        buffers[buf_id] = {}
+      end
+      return buffers[buf_id]
+    end,
+  })
+
+  -- Mock vim.wo with per-window options storage
+  vim.wo = setmetatable({}, {
+    __index = function(self, win_id)
+      if not rawget(self, "_windows") then
+        rawset(self, "_windows", {})
+      end
+      local windows = rawget(self, "_windows")
+      if not windows[win_id] then
+        windows[win_id] = {}
+      end
+      return windows[win_id]
+    end,
+  })
+
+  -- Mock vim.cmd for editor commands
+  rawset(vim, "cmd", stub.new())
+
+  -- Load real data module (not pre-mocked)
+  -- This gives us access to parse_response and other functions
+  local data_module = require("ada_ls.project_view.data")
+
+  -- Create wrapper mock with real parse_response but mockable fetch/is_supported
+  local mock_data = {
+    parse_response = data_module.parse_response, -- Real function
+    is_supported = stub.new().returns(true, nil),
+    fetch = stub.new().returns(nil), -- Will be overridden per test
+    find_source = stub.new(),
+  }
+  package.loaded["ada_ls.project_view.data"] = mock_data
+
+  return mock_data
 end
 
 return M
