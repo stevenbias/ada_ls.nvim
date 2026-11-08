@@ -191,6 +191,18 @@ local function check_config()
   end
 end
 
+local function check_telescope()
+  local ok = pcall(require, "telescope")
+  if ok then
+    vim.health.ok("telescope.nvim is installed")
+  else
+    vim.health.warn("telescope.nvim is not installed", {
+      "Optional dependency: enables Telescope UI for :Als pick_gpr",
+      "Required for :Als project_files",
+    })
+  end
+end
+
 function M.check()
   vim.health.start("ada_ls.nvim: Neovim version")
   if vim.fn.has("nvim-0.11") == 1 then
@@ -245,6 +257,7 @@ function M.check()
       "Needed for GPR Tree-sitter highlighting when the Ada parser is missing",
     },
   })
+  check_telescope()
 
   vim.health.start("ada_ls.nvim: Ada Language Server")
   check_lsp_client(als_available)

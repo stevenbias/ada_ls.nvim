@@ -63,6 +63,56 @@ describe("ada_ls.health", function()
       assert.stub(vim.fn.executable).was_called_with("tree-sitter")
     end)
 
+    it("reports ok when telescope.nvim is installed", function()
+      rawset(package.loaded, "telescope", {})
+
+      health.check()
+
+      assert.is_true(
+        common.find_stub_call(vim.health.ok, "telescope.nvim is installed")
+      )
+    end)
+
+    it("reports warn when telescope.nvim is not installed", function()
+      local original_loaded = package.loaded["telescope"]
+      local original_preload = package.preload["telescope"]
+
+      rawset(package.loaded, "telescope", nil)
+      rawset(package.preload, "telescope", function()
+        error("module not found")
+      end)
+
+      health.check()
+
+      local telescope_warn_call = nil
+      for _, call in ipairs(vim.health.warn.calls or {}) do
+        if call.vals[1] == "telescope.nvim is not installed" then
+          telescope_warn_call = call
+          break
+        end
+      end
+
+      assert.is_true(
+        common.find_stub_call(
+          vim.health.warn,
+          "telescope.nvim is not installed"
+        )
+      )
+
+      assert.is_true(telescope_warn_call ~= nil)
+      assert.is_true(type(telescope_warn_call.vals[2]) == "table")
+      assert.is_true(
+        telescope_warn_call.vals[2][1]
+          == "Optional dependency: enables Telescope UI for :Als pick_gpr"
+      )
+      assert.is_true(
+        telescope_warn_call.vals[2][2] == "Required for :Als project_files"
+      )
+
+      rawset(package.loaded, "telescope", original_loaded)
+      rawset(package.preload, "telescope", original_preload)
+    end)
+
     it("reports Neovim >= 0.11 as ok", function()
       vim.fn.has = stub.new().returns(1)
       health.check()
