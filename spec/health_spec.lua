@@ -119,6 +119,46 @@ describe("ada_ls.health", function()
         assert.matches("24.0.0", call_args[1])
       end)
 
+      it("warns when ada_language_server is older than supported", function()
+        vim.fn.executable = stub.new().returns(1)
+        vim.fn.system = stub.new().returns("ada_language_server 2026.1\n")
+
+        local result = health._check_executable("ada_language_server")
+
+        assert.is_true(result)
+        assert.stub(vim.health.warn).was_called()
+        local call_args = vim.health.warn.calls[1].vals
+        assert.matches("older than supported minimum 2027.0", call_args[1])
+      end)
+
+      it(
+        "reports ok when ada_language_server meets supported version",
+        function()
+          vim.fn.executable = stub.new().returns(1)
+          vim.fn.system = stub.new().returns("ada_language_server 2027.0\n")
+
+          local result = health._check_executable("ada_language_server")
+
+          assert.is_true(result)
+          assert.stub(vim.health.ok).was_called()
+          local call_args = vim.health.ok.calls[1].vals
+          assert.matches("supported: >= 2027.0", call_args[1])
+        end
+      )
+
+      it("warns when ada_language_server version is unparsable", function()
+        vim.fn.executable = stub.new().returns(1)
+        vim.fn.system =
+          stub.new().returns("ada_language_server version unknown\n")
+
+        local result = health._check_executable("ada_language_server")
+
+        assert.is_true(result)
+        assert.stub(vim.health.warn).was_called()
+        local call_args = vim.health.warn.calls[1].vals
+        assert.matches("version could not be determined", call_args[1])
+      end)
+
       it(
         "returns false and errors when required executable not found",
         function()

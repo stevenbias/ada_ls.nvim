@@ -1,6 +1,39 @@
 local M = {}
 
 local ALS_EXECUTABLE = "ada_language_server"
+local MIN_ALS_VERSION = "2027.0"
+
+local function parse_version(text)
+  if type(text) ~= "string" then
+    return nil
+  end
+
+  local major, minor, patch = text:match("(%d+)%.(%d+)%.(%d+)")
+  if major and minor and patch then
+    return { tonumber(major), tonumber(minor), tonumber(patch) }
+  end
+
+  major, minor = text:match("(%d+)%.(%d+)")
+  if major and minor then
+    return { tonumber(major), tonumber(minor), 0 }
+  end
+
+  return nil
+end
+
+local function version_at_least(actual, minimum)
+  for i = 1, 3 do
+    local a = actual[i] or 0
+    local b = minimum[i] or 0
+    if a > b then
+      return true
+    end
+    if a < b then
+      return false
+    end
+  end
+  return true
+end
 
 local function check_executable(cmd, opts)
   opts = opts or {}
@@ -11,7 +44,45 @@ local function check_executable(cmd, opts)
     local version_result = vim.fn.system(cmd .. " " .. version_cmd .. " 2>&1")
     local version_line = vim.split(version_result, "\n")[1] or ""
     local version = vim.trim(version_line)
-    vim.health.ok(string.format("`%s` found (%s)", cmd, version))
+
+    if cmd == ALS_EXECUTABLE then
+      local detected = parse_version(version)
+      local minimum = parse_version(MIN_ALS_VERSION)
+
+      if detected and minimum then
+        if version_at_least(detected, minimum) then
+          vim.health.ok(
+            string.format(
+              "`%s` found (%s; supported: >= %s)",
+              cmd,
+              version,
+              MIN_ALS_VERSION
+            )
+          )
+        else
+          vim.health.warn(
+            string.format(
+              "`%s` found (%s) but is older than supported minimum %s",
+              cmd,
+              version,
+              MIN_ALS_VERSION
+            )
+          )
+        end
+      else
+        vim.health.warn(
+          string.format(
+            "`%s` found (%s) but version could not be determined (supported: >= %s)",
+            cmd,
+            version,
+            MIN_ALS_VERSION
+          )
+        )
+      end
+    else
+      vim.health.ok(string.format("`%s` found (%s)", cmd, version))
+    end
+
     return true
   else
     if opts.optional then
