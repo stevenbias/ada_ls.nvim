@@ -54,18 +54,47 @@ describe("ada_ls.utils", function()
       assert.equals("Ada LSP client not found", err)
     end)
 
-    it("returns cached client on subsequent calls", function()
+    it("returns nil when current buffer has no Ada client", function()
       local mock_client = common.create_lsp_client()
-      common.setup_lsp_client(mock_client)
+      vim.lsp.get_clients = function(opts)
+        if opts and opts.bufnr then
+          return {}
+        end
+        if opts and opts.name == "ada_ls" then
+          return { mock_client }
+        end
+        return {}
+      end
 
-      local client1 = utils.get_ada_ls()
-      local client2 = utils.get_ada_ls()
+      local client, err = utils.get_ada_ls()
 
-      assert.equals(mock_client, client1)
-      assert.equals(client1, client2)
-      -- get_clients should only be called once due to caching
-      assert.stub(vim.lsp.get_clients).was_called(1)
+      assert.is_nil(client)
+      assert.equals("Ada LSP client not found", err)
     end)
+
+    it(
+      "does not fall back to global gpr_ls when buffer has no client",
+      function()
+        local mock_client = common.create_lsp_client({ name = "gpr_ls" })
+        vim.lsp.get_clients = function(opts)
+          if opts and opts.bufnr then
+            return {}
+          end
+          if opts and opts.name == "ada_ls" then
+            return {}
+          end
+          if opts and opts.name == "gpr_ls" then
+            return { mock_client }
+          end
+          return {}
+        end
+
+        local client, err = utils.get_ada_ls()
+
+        assert.is_nil(client)
+        assert.equals("Ada LSP client not found", err)
+      end
+    )
   end)
 
   describe("clear", function()
@@ -156,6 +185,17 @@ describe("ada_ls.utils", function()
   end)
 
   describe("notify_server", function()
+    before_each(function()
+      common.cleanup_packages()
+      common.setup_vim_globals()
+      utils = require("ada_ls.utils")
+    end)
+
+    after_each(function()
+      utils.clear()
+      common.cleanup_packages()
+    end)
+
     it("returns false when no LSP client", function()
       vim.lsp.get_clients = stub.new().returns({})
 
@@ -169,6 +209,42 @@ describe("ada_ls.utils", function()
 
       utils.notify_server("test/method", { key = "value" })
 
+      assert.stub(mock_client.notify).was_called()
+    end)
+
+    it(
+      "notifies client with workspace/didChangeConfiguration including skip_json_file flag",
+      function()
+        local mock_client = common.create_lsp_client()
+        common.setup_lsp_client(mock_client)
+
+        utils.notify_server(
+          "workspace/didChangeConfiguration",
+          { settings = { ada = {} } },
+          false
+        )
+
+        assert.stub(mock_client.notify).was_called()
+        local call = mock_client.notify.calls[1]
+        assert.equals("workspace/didChangeConfiguration", call.vals[2])
+      end
+    )
+
+    it("accepts skip_json_file parameter when true", function()
+      local mock_client = common.create_lsp_client()
+      common.setup_lsp_client(mock_client)
+
+      -- Should not error with skip_json_file=true
+      utils.notify_server("test/method", {}, true)
+      assert.stub(mock_client.notify).was_called()
+    end)
+
+    it("accepts skip_json_file parameter when false", function()
+      local mock_client = common.create_lsp_client()
+      common.setup_lsp_client(mock_client)
+
+      -- Should not error with skip_json_file=false
+      utils.notify_server("test/method", {}, false)
       assert.stub(mock_client.notify).was_called()
     end)
   end)
@@ -242,7 +318,10 @@ describe("ada_ls.utils", function()
       }))
       local name, pos = utils.get_subprogram_name_from_line(4)
       assert.equals("My_Procedure", name)
-      assert.same({ 2, 5 }, pos)
+      assert.same({
+        start = { line = 2, character = 5 },
+        end_ = { line = 7, character = 1 },
+      }, pos)
     end)
 
     it("returns nil when no symbols match line", function()
@@ -254,17 +333,97 @@ describe("ada_ls.utils", function()
   end)
 
   describe("reset_als_client", function()
-    it("clears client and reopens buffer", function()
+    it("notifies user when nvim-0.12 is not available", function()
       local mock_client = common.create_lsp_client()
       common.setup_lsp_client(mock_client)
+      rawset(vim.fn, "has", function(_feature)
+        return 0
+      end)
 
       utils.get_ada_ls()
 
       utils.reset_als_client()
 
-      assert.stub(mock_client.stop).was_called()
-      assert.stub(vim.cmd).was_called_with("e")
+      assert.stub(vim.notify).was_called()
+      assert.stub(vim.cmd).was_not_called()
     end)
+
+    it("calls lsp restart when nvim-0.12 is available", function()
+      local mock_client = common.create_lsp_client()
+      common.setup_lsp_client(mock_client)
+      rawset(vim.fn, "has", function(_feature)
+        return 1
+      end)
+
+      utils.get_ada_ls()
+
+      utils.reset_als_client()
+
+      assert.stub(vim.cmd).was_called_with("lsp restart ada_ls")
+    end)
+
+    it("restarts gpr_ls when ada_ls is not active", function()
+      local mock_client = common.create_lsp_client({ name = "gpr_ls" })
+      vim.lsp.get_clients = function(opts)
+        if opts and opts.name == "ada_ls" then
+          return {}
+        end
+        if opts and opts.name == "gpr_ls" then
+          return { mock_client }
+        end
+        return {}
+      end
+      rawset(vim.fn, "has", function(_feature)
+        return 1
+      end)
+
+      utils.reset_als_client()
+
+      assert.stub(vim.cmd).was_called_with("lsp restart gpr_ls")
+    end)
+
+    it(
+      "restarts gpr_ls using global lookup when config buffer has no clients",
+      function()
+        local mock_client = common.create_lsp_client({ name = "gpr_ls" })
+        vim.lsp.get_clients = function(opts)
+          if opts and opts.name == "ada_ls" and opts.bufnr then
+            return {}
+          end
+          if opts and opts.name == "gpr_ls" and opts.bufnr then
+            return {}
+          end
+          if opts and opts.name == "ada_ls" then
+            return {}
+          end
+          if opts and opts.name == "gpr_ls" then
+            return { mock_client }
+          end
+          return {}
+        end
+        rawset(vim.fn, "has", function(_feature)
+          return 1
+        end)
+
+        utils.reset_als_client()
+
+        assert.stub(vim.cmd).was_called_with("lsp restart gpr_ls")
+      end
+    )
+
+    it(
+      "defaults restart target to ada_ls when no Ada client is found",
+      function()
+        vim.lsp.get_clients = stub.new().returns({})
+        rawset(vim.fn, "has", function(_feature)
+          return 1
+        end)
+
+        utils.reset_als_client()
+
+        assert.stub(vim.cmd).was_called_with("lsp restart ada_ls")
+      end
+    )
   end)
 
   describe("get_server_project_name", function()
@@ -285,6 +444,131 @@ describe("ada_ls.utils", function()
       })
 
       assert.equals("test.gpr", utils.get_server_project_name())
+    end)
+  end)
+
+  describe("get_relative_path", function()
+    it("returns empty string for nil path", function()
+      assert.equals("", utils.get_relative_path(nil, "/base"))
+    end)
+
+    it("returns empty string for empty path", function()
+      assert.equals("", utils.get_relative_path("", "/base"))
+    end)
+
+    it("returns basename when base_dir is nil", function()
+      assert.equals(
+        "file.adb",
+        utils.get_relative_path("/project/src/file.adb", nil)
+      )
+    end)
+
+    it("returns basename when base_dir is empty", function()
+      assert.equals(
+        "file.adb",
+        utils.get_relative_path("/project/src/file.adb", "")
+      )
+    end)
+
+    it("returns relative path when inside base directory", function()
+      assert.equals(
+        "src/file.adb",
+        utils.get_relative_path("/project/src/file.adb", "/project")
+      )
+    end)
+
+    it("returns '.' for exact match with base directory", function()
+      assert.equals(".", utils.get_relative_path("/project", "/project"))
+    end)
+
+    it("returns basename when path is outside base directory", function()
+      assert.equals(
+        "other.adb",
+        utils.get_relative_path("/other/path/other.adb", "/project")
+      )
+    end)
+
+    it("does not treat prefix-only paths as inside base directory", function()
+      assert.equals(
+        "file.adb",
+        utils.get_relative_path("/project2/src/file.adb", "/project")
+      )
+    end)
+
+    it(
+      "does not treat sibling names sharing prefix as inside base directory",
+      function()
+        assert.equals(
+          "project-other",
+          utils.get_relative_path("/project-other", "/project")
+        )
+      end
+    )
+
+    it("handles trailing slashes in path", function()
+      assert.equals("src", utils.get_relative_path("/project/src/", "/project"))
+    end)
+
+    it("handles trailing slashes in base_dir", function()
+      assert.equals(
+        "src/file.adb",
+        utils.get_relative_path("/project/src/file.adb", "/project/")
+      )
+    end)
+  end)
+
+  describe("normalize_path", function()
+    it("returns empty string for nil input", function()
+      assert.equals("", utils.normalize_path(nil))
+    end)
+
+    it("returns empty string for empty input", function()
+      assert.equals("", utils.normalize_path(""))
+    end)
+
+    it("returns path unchanged when no trailing slash", function()
+      assert.equals("/project/src", utils.normalize_path("/project/src"))
+    end)
+
+    it("strips single trailing slash", function()
+      assert.equals("/project/src", utils.normalize_path("/project/src/"))
+    end)
+
+    it("strips multiple trailing slashes", function()
+      assert.equals("/project/src", utils.normalize_path("/project/src///"))
+    end)
+
+    it("preserves internal slashes", function()
+      assert.equals(
+        "/project/src/dir",
+        utils.normalize_path("/project/src/dir")
+      )
+    end)
+  end)
+
+  describe("safe_basename", function()
+    it("returns empty string for nil input", function()
+      assert.equals("", utils.safe_basename(nil))
+    end)
+
+    it("returns empty string for empty input", function()
+      assert.equals("", utils.safe_basename(""))
+    end)
+
+    it("returns basename for normal path", function()
+      assert.equals("file.adb", utils.safe_basename("/project/src/file.adb"))
+    end)
+
+    it("returns directory name for directory path", function()
+      assert.equals("src", utils.safe_basename("/project/src"))
+    end)
+
+    it("handles trailing slash correctly", function()
+      assert.equals("src", utils.safe_basename("/project/src/"))
+    end)
+
+    it("handles multiple trailing slashes", function()
+      assert.equals("src", utils.safe_basename("/project/src///"))
     end)
   end)
 end)

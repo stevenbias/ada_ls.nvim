@@ -71,11 +71,10 @@ local function als_handlers()
     end
 
     if result and result.edit and result.edit.documentChanges then
-      local filename = ""
       for _, change in ipairs(result.edit.documentChanges) do
         if change.kind == "create" then
           require("ada_ls.utils").reset_als_client()
-          filename = vim.uri_to_fname(change.uri)
+          local filename = vim.uri_to_fname(change.uri)
           vim.schedule(function()
             vim.cmd.edit(filename)
             -- Fix last empty line that provokes bug on updating package body
@@ -84,10 +83,6 @@ local function als_handlers()
               vim.cmd.normal("dd")
               vim.cmd.normal("gg")
             end
-          end)
-        elseif change.textDocument and filename == "" then
-          vim.schedule(function()
-            vim.cmd.edit(vim.uri_to_fname(change.textDocument.uri))
           end)
         end
       end
@@ -98,10 +93,24 @@ local function als_handlers()
   end
 end
 
+local function root_markers()
+  return {
+    ".als.json",
+    "Makefile",
+    ".git",
+    "alire.toml",
+    function(name)
+      return name:match("%.gpr$") or name:match("%.adc$")
+    end,
+  }
+end
+
 function M.get()
   if M.cfg then
     return M.cfg
   end
+
+  local als_refactor = require("ada_ls.refactoring")
 
   M.cfg = {
     cmd = { "ada_language_server" },
@@ -110,13 +119,14 @@ function M.get()
     on_attach = on_als_attach,
     handlers = als_handlers(),
     root_dir = function(bufnr, on_dir)
-      on_dir(
-        vim.fs.root(
-          bufnr,
-          { ".als.json", "Makefile", ".git", "alire.toml", "*.gpr", "*.adc" }
-        )
-      )
+      on_dir(vim.fs.root(bufnr, root_markers()))
     end,
+    commands = {
+      ["als-refactor-add-parameters"] = als_refactor.add_parameter,
+      ["als-refactor-change_parameters_type"] = als_refactor.change_parameter_type,
+      ["als-refactor-change_parameters_default_value"] = als_refactor.change_parameter_default,
+      ["als-refactor-replace-type"] = als_refactor.replace_type,
+    },
   }
   return M.cfg
 end

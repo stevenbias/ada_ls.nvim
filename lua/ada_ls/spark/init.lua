@@ -58,7 +58,31 @@ local function build_args(kind, state)
     local _, pos =
       require("ada_ls.utils").get_subprogram_name_from_line(vim.fn.line("."))
     if pos then
-      table.insert(args, "--limit-subp=" .. filename .. ":" .. pos[1])
+      table.insert(args, "--limit-subp=" .. filename .. ":" .. pos.start.line)
+    end
+  end
+
+  return args
+end
+
+local function scenario_variables_to_args(scenario_variables_info)
+  local args = {}
+  local variables = type(scenario_variables_info) == "table"
+      and scenario_variables_info.variables
+    or nil
+
+  if not vim.islist(variables) then
+    return args
+  end
+
+  for _, var in ipairs(variables) do
+    if
+      type(var) == "table"
+      and type(var.name) == "string"
+      and var.name ~= ""
+      and var.value ~= nil
+    then
+      table.insert(args, "-X" .. var.name .. "=" .. tostring(var.value))
     end
   end
 
@@ -66,8 +90,40 @@ local function build_args(kind, state)
 end
 
 -- Parse gnatprove output and populate quickfix
-local function populate_quickfix(output, cwd)
+local function populate_quickfix(output, cwd, source_dirs)
   local qf_items = {}
+
+  local function source_path(file)
+    if file:match("^/") or file:match("^%a:[/\\]") then
+      return file
+    end
+    local relative = vim.fs.joinpath(cwd, file)
+    if vim.fn.filereadable(relative) == 1 then
+      return relative
+    end
+    -- GNATprove often prints only the basename even when a GPR project uses
+    -- source directories outside its root. Use the proof's captured directories
+    -- so a later buffer switch cannot redirect diagnostics to another project.
+    for _, directory in ipairs(source_dirs or {}) do
+      if type(directory) == "table" then
+        directory = directory.uri
+      end
+      if type(directory) == "string" then
+        if directory:match("^file:") then
+          directory = vim.uri_to_fname(directory)
+        elseif
+          not directory:match("^/") and not directory:match("^%a:[/\\]")
+        then
+          directory = vim.fs.joinpath(cwd, directory)
+        end
+        local candidate = vim.fs.joinpath(directory, file)
+        if vim.fn.filereadable(candidate) == 1 then
+          return candidate
+        end
+      end
+    end
+    return relative
+  end
 
   -- gnatprove --output=oneline format:
   -- filename:line:col: severity: message
@@ -85,14 +141,8 @@ local function populate_quickfix(output, cwd)
         qf_type = "I"
       end
 
-      -- Make path absolute if relative
-      local filepath = file
-      if not file:match("^/") then
-        filepath = cwd .. "/" .. file
-      end
-
       table.insert(qf_items, {
-        filename = filepath,
+        filename = source_path(file),
         lnum = tonumber(lnum),
         col = tonumber(col) or 1,
         text = "[" .. severity .. "] " .. msg,
@@ -120,10 +170,15 @@ local function run_gnatprove(kind, state)
   local notify = require("ada_ls.utils").notify
   local lsp_cmd = require("ada_ls.lsp_cmd")
 
+  if vim.fn.executable("gnatprove") ~= 1 then
+    notify("gnatprove executable not found", vim.log.levels.ERROR)
+    return
+  end
+
   -- Get project file
-  local prj_uri = lsp_cmd.get_prj_file()
+  local prj_uri, err = lsp_cmd.get_prj_file()
   if not prj_uri then
-    notify("No project file found", vim.log.levels.ERROR)
+    notify(err, vim.log.levels.ERROR)
     return
   end
   local prj_file = vim.uri_to_fname(prj_uri)
@@ -135,6 +190,10 @@ local function run_gnatprove(kind, state)
 
   -- Add -cargs -gnatef for better error messages (except for clean)
   if kind ~= "clean" then
+    vim.list_extend(
+      args,
+      scenario_variables_to_args(lsp_cmd.get_scenario_variables_info())
+    )
     table.insert(args, "-cargs")
     table.insert(args, "-gnatef")
   end
@@ -149,18 +208,39 @@ local function run_gnatprove(kind, state)
     vim.log.levels.INFO
   )
 
-  -- Get working directory
+  -- Capture the project context before starting the asynchronous proof.
   local cwd = lsp_cmd.get_root_dir() or vim.fn.getcwd()
+  local source_dirs = {}
+  if kind ~= "clean" then
+    source_dirs = lsp_cmd.get_src_dirs() or {}
+  end
 
-  -- Run asynchronously
-  vim.system(cmd, {
-    cwd = cwd,
-    text = true,
-    detach = true,
-    stdout = function()
+  local stdout_chunks = {}
+  local stderr_chunks = {}
+  local running_notified = false
+
+  local function handle_stream(chunks, data)
+    if data and data ~= "" then
+      table.insert(chunks, data)
+    end
+    if not running_notified then
+      running_notified = true
       vim.schedule(function()
         vim.notify(kind_display .. " running...")
       end)
+    end
+  end
+
+  -- Run asynchronously
+  local ok, system_err = pcall(vim.system, cmd, {
+    cwd = cwd,
+    text = true,
+    detach = true,
+    stdout = function(_, data)
+      handle_stream(stdout_chunks, data)
+    end,
+    stderr = function(_, data)
+      handle_stream(stderr_chunks, data)
     end,
   }, function(result)
     vim.schedule(function()
@@ -172,10 +252,19 @@ local function run_gnatprove(kind, state)
       end
 
       -- Parse output to quickfix
-      local output = (result.stdout or "") .. (result.stderr or "")
-      populate_quickfix(output, cwd)
+      local output = (result.stdout or table.concat(stdout_chunks, ""))
+        .. (result.stderr or table.concat(stderr_chunks, ""))
+      populate_quickfix(output, cwd, source_dirs)
     end)
   end)
+
+  if not ok then
+    notify(
+      "Failed to start gnatprove: " .. tostring(system_err),
+      vim.log.levels.ERROR
+    )
+    return
+  end
 end
 
 -- Run a SPARK operation with saved options
@@ -245,16 +334,17 @@ end
 function M.select_options()
   require("ada_ls.spark.ui").ask_spark_options(function(state)
     if state then
+      local spark_config = require("ada_ls.spark.config")
       require("ada_ls.utils").notify(
         "SPARK Level saved: " .. state.proof_level,
         vim.log.levels.INFO
       )
       local opts_id = {}
-      for opt in ipairs(state.options) do
-        table.insert(
-          opts_id,
-          require("ada_ls.spark.config").SPARK_OPTIONS[opt].id
-        )
+      for _, option_idx in ipairs(state.options or {}) do
+        local option = spark_config.SPARK_OPTIONS[option_idx]
+        if option and option.id then
+          table.insert(opts_id, option.id)
+        end
       end
       require("ada_ls.utils").notify(
         "SPARK options saved: " .. table.concat(opts_id, ", "),

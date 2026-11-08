@@ -46,6 +46,9 @@ describe("ada_ls.spark", function()
         return "/tmp"
       end,
       setqflist = stub.new(),
+      executable = function()
+        return 1
+      end,
       len = function(t)
         return #t
       end,
@@ -532,6 +535,55 @@ other.ads:5:1: error: cannot prove precondition
           assert.equals("/abs/path/file.adb", qf_opts.items[1].filename)
         end)
 
+        it(
+          "resolves basenames in project and external source directories",
+          function()
+            local get_src_dirs = stub.new()
+            package.loaded["ada_ls.lsp_cmd"] = { get_src_dirs = get_src_dirs }
+            vim.fn.filereadable = function(path)
+              return (
+                path == "/project/src/main.adb" or path == "/shared/other.ads"
+              )
+                  and 1
+                or 0
+            end
+            spark._populate_quickfix(
+              "main.adb:10:5: info: range check proved\nother.ads:5:1: info: postcondition proved\n",
+              "/project",
+              { "src", { name = "shared", uri = "file:///shared" } }
+            )
+
+            local items = vim.fn.setqflist.calls[1].vals[3].items
+            assert.equals("/project/src/main.adb", items[1].filename)
+            assert.equals("/shared/other.ads", items[2].filename)
+            assert.equals(10, items[1].lnum)
+            assert.equals(5, items[1].col)
+            assert.stub(get_src_dirs).was_not_called()
+          end
+        )
+
+        it(
+          "keeps the relative diagnostic path when ALS sources are unavailable",
+          function()
+            package.loaded["ada_ls.lsp_cmd"] = {
+              get_src_dirs = function()
+                return nil, "No client"
+              end,
+            }
+            vim.fn.filereadable = function()
+              return 0
+            end
+            spark._populate_quickfix(
+              "missing.adb:3:2: medium: check might fail\n",
+              "/project"
+            )
+
+            local item = vim.fn.setqflist.calls[1].vals[3].items[1]
+            assert.equals("/project/missing.adb", item.filename)
+            assert.equals("W", item.type)
+          end
+        )
+
         it("opens quickfix when items present", function()
           local output = "main.adb:1:1: info: test\n"
           spark._populate_quickfix(output, "/project")
@@ -824,6 +876,74 @@ other.ads:5:1: error: cannot prove precondition
           assert.same({}, result)
         end)
       end)
+
+      describe("ask_spark_options", function()
+        local spark_ui
+        local spark_mock
+        local captured
+
+        before_each(function()
+          captured = common.setup_spark_ui_mocks()
+          spark_mock = common.setup_spark_mock()
+          package.loaded["ada_ls.spark.ui"] = nil
+          spark_ui = require("ada_ls.spark.ui")
+        end)
+
+        it("returns nil when level selection cancelled", function()
+          rawset(vim.fn, "inputlist", function()
+            return -1
+          end)
+          spark_mock.load_state = function()
+            return { proof_level = nil, options = {} }
+          end
+
+          local result = "not_called"
+          spark_ui.ask_spark_options(function(r)
+            result = r
+          end)
+
+          assert.is_nil(result)
+        end)
+
+        it("returns nil when options selection cancelled", function()
+          local result = "not_called"
+          spark_ui.ask_spark_options(function(r)
+            result = r
+          end)
+
+          rawset(vim, "keymap", {
+            set = function(_, key, fn, _)
+              if key == "q" then
+                fn()
+              end
+            end,
+          })
+          package.loaded["ada_ls.spark.ui"] = nil
+          spark_ui = require("ada_ls.spark.ui")
+
+          spark_ui.ask_spark_options(function(r)
+            result = r
+          end)
+
+          assert.is_nil(result)
+        end)
+
+        it("saves state and calls callback on successful selection", function()
+          local result = nil
+
+          spark_ui.ask_spark_options(function(r)
+            result = r
+          end)
+
+          if captured.cr_callback then
+            captured.cr_callback()
+          end
+
+          assert.stub(spark_mock.save_state).was_called()
+          assert.is_table(result)
+          assert.is_number(result.proof_level)
+        end)
+      end)
     end)
   end
 
@@ -834,15 +954,7 @@ other.ads:5:1: error: cannot prove precondition
 
         spark.prove()
 
-        assert.stub(vim.notify).was_called()
-        local found_error = false
-        for _, call in ipairs(vim.notify.calls) do
-          if call.vals[1] and call.vals[1]:match("No project file") then
-            found_error = true
-            break
-          end
-        end
-        assert.is_true(found_error)
+        assert.is_true(common.find_stub_call(vim.notify, "No project file"))
       end)
 
       it("calls vim.system with gnatprove when project exists", function()
@@ -861,6 +973,47 @@ other.ads:5:1: error: cannot prove precondition
         assert.stub(vim.system).was_called()
         local call_args = vim.system.calls[1].vals
         assert.equals("gnatprove", call_args[1][1])
+      end)
+
+      it("passes scenario variables before -cargs", function()
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, params, callback)
+            if params.command == "als-project-file" then
+              callback(nil, "file:///project/root/test.gpr")
+            elseif params.command == "als-scenario-variables-information" then
+              callback(nil, {
+                variables = { { name = "MODE", value = "release" } },
+              })
+            elseif params.command == "als-source-dirs" then
+              callback(nil, {})
+            else
+              callback(nil, nil)
+            end
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.stub(vim.system).was_called()
+        local cmd = vim.system.calls[1].vals[1]
+        local scenario_idx
+        local cargs_idx
+
+        for i, arg in ipairs(cmd) do
+          if arg == "-XMODE=release" then
+            scenario_idx = i
+          elseif arg == "-cargs" then
+            cargs_idx = i
+          end
+        end
+
+        assert.is_not_nil(scenario_idx)
+        assert.is_not_nil(cargs_idx)
+        assert.is_true(scenario_idx < cargs_idx)
       end)
     end)
 
@@ -900,9 +1053,13 @@ other.ads:5:1: error: cannot prove precondition
 
     describe("clean", function()
       it("calls gnatprove with --clean", function()
+        local source_requests = 0
         local mock_client = common.create_lsp_client({
           root_dir = "/project/root",
-          request = function(_self, _method, _params, callback)
+          request = function(_self, _method, params, callback)
+            if params.command == "als-source-dirs" then
+              source_requests = source_requests + 1
+            end
             callback(nil, "file:///project/root/test.gpr")
           end,
         })
@@ -923,6 +1080,7 @@ other.ads:5:1: error: cannot prove precondition
           end
         end
         assert.is_true(found_clean)
+        assert.equals(0, source_requests)
       end)
     end)
 
@@ -946,7 +1104,11 @@ other.ads:5:1: error: cannot prove precondition
             return mock_client
           end,
           get_subprogram_name_from_line = function()
-            return "My_Procedure", { 10, 25 }
+            return "My_Procedure",
+              {
+                start = { line = 10, character = 1 },
+                end_ = { line = 25, character = 1 },
+              }
           end,
         })
 
@@ -967,6 +1129,73 @@ other.ads:5:1: error: cannot prove precondition
     end)
 
     describe("gnatprove async callbacks", function()
+      for _, sources_available in ipairs({ true, false }) do
+        it(
+          sources_available
+              and "keeps originating source directories after a project switch"
+            or "keeps the original cwd when sources are unavailable after a project switch",
+          function()
+            local source_requests = { ["/A"] = 0, ["/B"] = 0 }
+            local function request(client, _method, params, callback)
+              if params.command == "als-source-dirs" then
+                local root = client.root_dir
+                source_requests[root] = source_requests[root] + 1
+                if root == "/A" and not sources_available then
+                  callback({ message = "Source directories unavailable" }, nil)
+                else
+                  callback(nil, {
+                    { name = "src", uri = "file://" .. root .. "/src" },
+                  })
+                end
+              elseif params.command == "als-project-file" then
+                callback(nil, "file://" .. client.root_dir .. "/test.gpr")
+              end
+            end
+            local client_a = common.create_lsp_client({
+              root_dir = "/A",
+              request = request,
+            })
+            local client_b = common.create_lsp_client({
+              root_dir = "/B",
+              request = request,
+            })
+            common.setup_lsp_client(client_a)
+            local captured_callback
+            rawset(vim, "system", function(_cmd, opts, callback)
+              assert.equals("/A", opts.cwd)
+              assert.equals(1, source_requests["/A"])
+              captured_callback = callback
+            end)
+            vim.fn.filereadable = function(path)
+              return (path == "/A/src/main.adb" or path == "/B/src/main.adb")
+                  and 1
+                or 0
+            end
+
+            spark.prove()
+            assert.is_function(captured_callback)
+
+            common.setup_lsp_client(client_b)
+            vim.fn.getcwd = function()
+              return "/B"
+            end
+            captured_callback({
+              code = 0,
+              stdout = "main.adb:10:5: info: range check proved\n",
+              stderr = "",
+            })
+
+            local item = vim.fn.setqflist.calls[1].vals[3].items[1]
+            assert.equals(
+              sources_available and "/A/src/main.adb" or "/A/main.adb",
+              item.filename
+            )
+            assert.equals(1, source_requests["/A"])
+            assert.equals(0, source_requests["/B"])
+          end
+        )
+      end
+
       it("notifies success when gnatprove returns code 0", function()
         local captured_callback
         rawset(vim, "system", function(_cmd, _opts, callback)
@@ -1056,6 +1285,45 @@ other.ads:5:1: error: cannot prove precondition
 
         assert.stub(vim.fn.setqflist).was_called()
       end)
+
+      it(
+        "populates quickfix from streamed stdout when result.stdout is nil",
+        function()
+          local captured_callback
+          local captured_stdout
+          rawset(vim, "system", function(_cmd, opts, callback)
+            captured_stdout = opts and opts.stdout
+            captured_callback = callback
+          end)
+
+          local mock_client = common.create_lsp_client({
+            root_dir = "/project/root",
+            request = function(_self, _method, _params, callback)
+              callback(nil, "file:///project/root/test.gpr")
+            end,
+          })
+          common.setup_lsp_client(mock_client)
+          package.loaded["ada_ls.utils"] = nil
+          package.loaded["ada_ls.lsp_cmd"] = nil
+
+          spark.prove()
+
+          assert.is_function(captured_callback)
+          if captured_stdout then
+            captured_stdout(nil, "main.adb:10:5: medium: overflow check\n")
+          end
+          captured_callback({
+            code = 1,
+            stdout = nil,
+            stderr = "",
+          })
+
+          assert.stub(vim.fn.setqflist).was_called()
+          local call_args = vim.fn.setqflist.calls[1].vals
+          local qf_opts = call_args[3]
+          assert.equals(1, #qf_opts.items)
+        end
+      )
 
       it("closes quickfix when no gnatprove output", function()
         local captured_callback
@@ -1199,6 +1467,128 @@ other.ads:5:1: error: cannot prove precondition
         spark.select_options()
 
         assert.stub(vim.fn.inputlist).was_called()
+      end)
+
+      it("notifies proof level when state is returned", function()
+        rawset(package.loaded, "ada_ls.spark.ui", {
+          ask_spark_options = function(callback)
+            callback({ proof_level = 2, options = {} })
+          end,
+        })
+        rawset(package.loaded, "ada_ls.spark.config", {
+          SPARK_OPTIONS = {},
+        })
+        local notify_stub = stub.new()
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = notify_stub,
+        })
+
+        package.loaded["ada_ls.spark"] = nil
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.select_options()
+
+        assert.is_true(
+          common.find_stub_call(notify_stub, "SPARK Level saved: 2")
+        )
+      end)
+
+      it("notifies options when state includes options", function()
+        rawset(package.loaded, "ada_ls.spark.ui", {
+          ask_spark_options = function(callback)
+            callback({ proof_level = 1, options = { 1, 2 } })
+          end,
+        })
+        rawset(package.loaded, "ada_ls.spark.config", {
+          SPARK_OPTIONS = {
+            { id = "multiprocessing" },
+            { id = "no_warnings" },
+          },
+        })
+        local notify_stub = stub.new()
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = notify_stub,
+        })
+
+        package.loaded["ada_ls.spark"] = nil
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.select_options()
+
+        assert.is_true(
+          common.find_stub_call(notify_stub, "SPARK options saved:")
+        )
+      end)
+
+      it("maps selected option values to matching option IDs", function()
+        rawset(package.loaded, "ada_ls.spark.ui", {
+          ask_spark_options = function(callback)
+            callback({ proof_level = 1, options = { 2, 4 } })
+          end,
+        })
+        rawset(package.loaded, "ada_ls.spark.config", {
+          SPARK_OPTIONS = {
+            { id = "multiprocessing" },
+            { id = "no_warnings" },
+            { id = "report_all" },
+            { id = "info" },
+          },
+        })
+        local notify_stub = stub.new()
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = notify_stub,
+        })
+
+        package.loaded["ada_ls.spark"] = nil
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.select_options()
+
+        assert.is_true(
+          common.find_stub_call(
+            notify_stub,
+            "SPARK options saved: no_warnings, info"
+          )
+        )
+      end)
+
+      it("does not run gnatprove when executable is missing", function()
+        vim.fn.executable = function(cmd)
+          if cmd == "gnatprove" then
+            return 0
+          end
+          return 1
+        end
+
+        local mock_client = common.create_lsp_client({
+          root_dir = "/project/root",
+          request = function(_self, _method, _params, callback)
+            callback(nil, "file:///project/root/test.gpr")
+          end,
+        })
+        common.setup_lsp_client(mock_client)
+        package.loaded["ada_ls.utils"] = nil
+        package.loaded["ada_ls.lsp_cmd"] = nil
+
+        spark.prove()
+
+        assert.stub(vim.system).was_not_called()
+        assert.is_true(common.find_stub_call(vim.notify, "gnatprove"))
+      end)
+
+      it("does nothing when callback returns nil", function()
+        rawset(package.loaded, "ada_ls.spark.ui", {
+          ask_spark_options = function(callback)
+            callback(nil)
+          end,
+        })
+        local notify_stub = stub.new()
+        rawset(package.loaded, "ada_ls.utils", {
+          notify = notify_stub,
+        })
+
+        package.loaded["ada_ls.spark"] = nil
+        local fresh_spark = require("ada_ls.spark")
+        fresh_spark.select_options()
+
+        assert.stub(notify_stub).was_not_called()
       end)
     end)
   end)
