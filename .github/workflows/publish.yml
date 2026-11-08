@@ -85,9 +85,9 @@ jobs:
             echo "tag=${{ steps.bump.outputs.new_tag }}" >> "$GITHUB_OUTPUT"
           fi
       - name: Publish to LuaRocks
-        uses: nvim-neorocks/luarocks-tag-release@v7
+        uses: nvim-neorocks/luarocks-tag-release@v9
         env:
-          LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
+          LUX_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
           GITHUB_REF_TYPE_OVERRIDE: tag
           GITHUB_REF_NAME_OVERRIDE: ${{ steps.luarocks_tag.outputs.tag }}
         with:
