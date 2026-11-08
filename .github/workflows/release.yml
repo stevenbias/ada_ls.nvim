@@ -46,17 +46,14 @@ jobs:
             echo "Waiting for final tag"
             exit 0
           fi
-          MERGED_SHA=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
-            -f state=closed -f base=main -f "head=${GITHUB_REPOSITORY_OWNER}:${RELEASE_BRANCH}" \
-            --jq '[.[] | select(.merged_at != null)][0].head.sha // empty')
-          if [[ -n "$MERGED_SHA" && "$MERGED_SHA" != "$RELEASE_SHA" ]]; then
-            echo "::error::Merged PR commit $MERGED_SHA does not match $FINAL_TAG ($RELEASE_SHA)"
-            exit 1
+          if ! git merge-base --is-ancestor "$RELEASE_SHA" HEAD; then
+            echo "Waiting for $FINAL_TAG ($RELEASE_SHA) to be merged into main"
+            exit 0
           fi
           PUBLISHED=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/status" \
             --jq '[.statuses[] | select(.context == "ada-ls/luarocks-publish")][0].state // empty')
-          if [[ -z "$MERGED_SHA" || "$PUBLISHED" != success ]]; then
-            echo "Waiting for merge and successful publication of $FINAL_TAG"
+          if [[ "$PUBLISHED" != success ]]; then
+            echo "Waiting for successful publication of $FINAL_TAG"
             exit 0
           fi
           echo "final_tag=$FINAL_TAG" >> "$GITHUB_OUTPUT"
