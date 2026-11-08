@@ -1,5 +1,40 @@
 local M = {}
 
+local ALS_EXECUTABLE = "ada_language_server"
+local MIN_ALS_VERSION = "2027.0"
+
+local function parse_version(text)
+  if type(text) ~= "string" then
+    return nil
+  end
+
+  local major, minor, patch = text:match("(%d+)%.(%d+)%.(%d+)")
+  if major and minor and patch then
+    return { tonumber(major), tonumber(minor), tonumber(patch) }
+  end
+
+  major, minor = text:match("(%d+)%.(%d+)")
+  if major and minor then
+    return { tonumber(major), tonumber(minor), 0 }
+  end
+
+  return nil
+end
+
+local function version_at_least(actual, minimum)
+  for i = 1, 3 do
+    local a = actual[i] or 0
+    local b = minimum[i] or 0
+    if a > b then
+      return true
+    end
+    if a < b then
+      return false
+    end
+  end
+  return true
+end
+
 local function check_executable(cmd, opts)
   opts = opts or {}
   local found = vim.fn.executable(cmd) == 1
@@ -9,7 +44,45 @@ local function check_executable(cmd, opts)
     local version_result = vim.fn.system(cmd .. " " .. version_cmd .. " 2>&1")
     local version_line = vim.split(version_result, "\n")[1] or ""
     local version = vim.trim(version_line)
-    vim.health.ok(string.format("`%s` found (%s)", cmd, version))
+
+    if cmd == ALS_EXECUTABLE then
+      local detected = parse_version(version)
+      local minimum = parse_version(MIN_ALS_VERSION)
+
+      if detected and minimum then
+        if version_at_least(detected, minimum) then
+          vim.health.ok(
+            string.format(
+              "`%s` found (%s; supported: >= %s)",
+              cmd,
+              version,
+              MIN_ALS_VERSION
+            )
+          )
+        else
+          vim.health.warn(
+            string.format(
+              "`%s` found (%s) but is older than supported minimum %s",
+              cmd,
+              version,
+              MIN_ALS_VERSION
+            )
+          )
+        end
+      else
+        vim.health.warn(
+          string.format(
+            "`%s` found (%s) but version could not be determined (supported: >= %s)",
+            cmd,
+            version,
+            MIN_ALS_VERSION
+          )
+        )
+      end
+    else
+      vim.health.ok(string.format("`%s` found (%s)", cmd, version))
+    end
+
     return true
   else
     if opts.optional then
@@ -24,7 +97,7 @@ local function check_executable(cmd, opts)
   end
 end
 
-local function check_lsp_client()
+local function check_lsp_client(als_available)
   local clients = vim.lsp.get_clients({ name = "ada_ls" })
 
   if #clients > 0 then
@@ -35,10 +108,19 @@ local function check_lsp_client()
     )
     return true, client
   else
-    vim.health.error("Ada Language Server not running", {
-      "Configure Ada Language Server first",
-      "See: https://github.com/AdaCore/ada_language_server",
-    })
+    local advice = {
+      "Open an Ada file to start the server",
+      "Run :Als pick_gpr if no project is selected yet",
+      "Run :checkhealth vim.lsp for more LSP details",
+    }
+    if als_available == false then
+      vim.health.warn("Ada Language Server not running", {
+        "Install ada_language_server and ensure it is available in PATH",
+        "Then reopen an Ada file and rerun :checkhealth ada_ls",
+      })
+    else
+      vim.health.error("Ada Language Server not running", advice)
+    end
     return false, nil
   end
 end
@@ -52,10 +134,18 @@ local function check_project_file()
   end
 
   local project_file = nil
-  local conf_file = require("ada_ls.utils").get_conf_file()
+  local utils = require("ada_ls.utils")
+  local conf_file = nil
+
+  if type(utils.get_json_file) == "function" then
+    conf_file = utils.get_json_file()
+  end
+  if not conf_file and type(utils.get_conf_file) == "function" then
+    conf_file = utils.get_conf_file()
+  end
 
   if conf_file then
-    vim.health.ok("Configuration file found (.als.json)")
+    vim.health.ok("Configuration file found (" .. conf_file .. ")")
     project_file = require("ada_ls.project").decode_json_config(conf_file)
     if project_file then
       vim.health.ok(string.format("Project file found (%s)", project_file))
@@ -101,6 +191,18 @@ local function check_config()
   end
 end
 
+local function check_telescope()
+  local ok = pcall(require, "telescope")
+  if ok then
+    vim.health.ok("telescope.nvim is installed")
+  else
+    vim.health.warn("telescope.nvim is not installed", {
+      "Optional dependency: enables Telescope UI for :Als pick_gpr",
+      "Required for :Als project_files",
+    })
+  end
+end
+
 function M.check()
   vim.health.start("ada_ls.nvim: Neovim version")
   if vim.fn.has("nvim-0.11") == 1 then
@@ -121,6 +223,13 @@ function M.check()
   end
 
   vim.health.start("ada_ls.nvim: External dependencies")
+  local als_available = check_executable(ALS_EXECUTABLE, {
+    advice = {
+      "Install ada_language_server",
+      "Ensure ada_language_server is available in PATH",
+      "Required for Ada Language Server features and :Als commands",
+    },
+  })
   check_executable("gprbuild", {
     advice = {
       "Install gprbuild (part of GNAT toolchain)",
@@ -140,9 +249,18 @@ function M.check()
       "Required for :Spark prove commands",
     },
   })
+  check_executable("tree-sitter", {
+    optional = true,
+    advice = {
+      "Install the tree-sitter CLI and ensure `tree-sitter` is available in PATH",
+      "Required by nvim-treesitter to build the Ada parser automatically",
+      "Needed for GPR Tree-sitter highlighting when the Ada parser is missing",
+    },
+  })
+  check_telescope()
 
   vim.health.start("ada_ls.nvim: Ada Language Server")
-  check_lsp_client()
+  check_lsp_client(als_available)
 
   vim.health.start("ada_ls.nvim: Configuration")
   check_config()

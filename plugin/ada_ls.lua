@@ -8,6 +8,21 @@ vim.g.loaded_ada_ls = true
 local als_cmd = "Als"
 local spark_cmd = "Spark"
 
+local function show_als_summary()
+  vim.notify(
+    table.concat({
+      "ada_ls.nvim configures the Ada Language Server automatically\n",
+      "Use `:Als pick_gpr` to select a GPR project file if needed",
+      "Use `:Als edit_gpr` to open the active GPR project file",
+      "Use `:Als config` to open the .als.json config file",
+      "Use `:Als build` to build the current project",
+      "Use `:Als other` to jump between .ads and .adb",
+      "Use `:Als health` to diagnose setup issues",
+    }, "\n"),
+    vim.log.levels.INFO
+  )
+end
+
 ---@class MyCmdSubcommand
 ---@field impl fun(args:string[], opts: table) The command implementation
 ---@field complete? fun(subcmd_arg_lead: string): string[] (optional) Command completions callback, taking the lead of the subcommand's arguments
@@ -22,7 +37,7 @@ local als_subcmd_tbl = {
   },
   clean = {
     impl = function()
-      require("ada_ls.gpr").clean()
+      require("ada_ls.gprtools").clean()
     end,
   },
   config = {
@@ -36,12 +51,26 @@ local als_subcmd_tbl = {
   edit_gpr = {
     impl = function()
       local notify = require("ada_ls.utils").notify
-      local gpr_uri = require("ada_ls.lsp_cmd").get_prj_file()
+      local gpr_uri, err = require("ada_ls.lsp_cmd").get_prj_file()
       if not gpr_uri then
-        notify("No project file found.", vim.log.levels.WARN)
+        notify(err, vim.log.levels.WARN)
         return
       end
       vim.cmd.edit(vim.uri_to_fname(gpr_uri))
+    end,
+  },
+  format = {
+    impl = function()
+      vim.lsp.buf.format({
+        filter = function(client)
+          return client.name == "ada_ls" or client.name == "gpr_ls"
+        end,
+      })
+    end,
+  },
+  health = {
+    impl = function()
+      vim.cmd("checkhealth ada_ls")
     end,
   },
   other = {
@@ -52,6 +81,25 @@ local als_subcmd_tbl = {
   pick_gpr = {
     impl = function()
       require("ada_ls.project").pick_gpr_file()
+    end,
+  },
+  project_files = {
+    impl = function()
+      require("ada_ls.project_view").pick_files()
+    end,
+  },
+  project_view = {
+    impl = function()
+      require("ada_ls.project_view").toggle()
+    end,
+  },
+  scenario_variables = {
+    impl = function()
+      local _, err = require("ada_ls.scenario_variables").set_variable()
+      if err then
+        local notify = require("ada_ls.utils").notify
+        notify(err, vim.log.levels.WARN)
+      end
     end,
   },
 }
@@ -90,6 +138,10 @@ local spark_subcmd_tbl = {
 local function subcmd(opts)
   local fargs = opts.fargs
   local subcommand_key = fargs[1]
+  if opts.name == als_cmd and not subcommand_key then
+    show_als_summary()
+    return
+  end
   -- Get the subcommand's arguments, if any
   local args = #fargs > 1 and vim.list_slice(fargs, 2, #fargs) or {}
   local subcommand_tbl
@@ -112,7 +164,7 @@ end
 
 local function create_command(cmd_name)
   vim.api.nvim_create_user_command(cmd_name, subcmd, {
-    nargs = "+",
+    nargs = cmd_name == als_cmd and "*" or "+",
     desc = cmd_name .. " commands",
     complete = function(arg_lead, cmdline, _)
       local subcommand_tbl
@@ -134,15 +186,11 @@ local function create_command(cmd_name)
         return subcommand_tbl[subcmd_key].complete(subcmd_arg_lead)
       end
       -- Check if cmdline is a subcommand
-      if cmdline:match("^['<,'>]*" .. cmd_name .. "[!]*%s+%w*$") then
+      if cmdline:match("^['<,'>]*" .. cmd_name .. "[!]*%s+[%w_]*$") then
         -- Filter subcommands that match
-        local subcommand_keys = vim.tbl_keys(subcommand_tbl)
-        return vim
-          .iter(subcommand_keys)
-          :filter(function(key)
-            return key:find(arg_lead) ~= nil
-          end)
-          :totable()
+        return vim.tbl_filter(function(key)
+          return key:find(arg_lead) ~= nil
+        end, vim.tbl_keys(subcommand_tbl))
       end
     end,
     bang = true,

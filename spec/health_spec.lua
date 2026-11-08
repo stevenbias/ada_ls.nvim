@@ -35,6 +35,9 @@ describe("ada_ls.health", function()
         get_conf_file = function()
           return nil
         end,
+        get_server_project_name = function()
+          return nil
+        end,
       })
       rawset(package.loaded, "ada_ls.project", {
         decode_json_config = function()
@@ -48,56 +51,106 @@ describe("ada_ls.health", function()
       assert.is_true(#vim.health.start.calls >= 5)
     end)
 
-    it("reports Neovim >= 0.11 as ok", function()
-      vim.fn.has = stub.new().returns(1)
+    it("checks ada_language_server executable", function()
       health.check()
-      local found = false
-      for _, call in ipairs(vim.health.ok.calls) do
-        if call.vals[1] and call.vals[1]:match("Neovim") then
-          found = true
+
+      assert.stub(vim.fn.executable).was_called_with("ada_language_server")
+    end)
+
+    it("checks tree-sitter executable", function()
+      health.check()
+
+      assert.stub(vim.fn.executable).was_called_with("tree-sitter")
+    end)
+
+    it("reports ok when telescope.nvim is installed", function()
+      rawset(package.loaded, "telescope", {})
+
+      health.check()
+
+      assert.is_true(
+        common.find_stub_call(vim.health.ok, "telescope.nvim is installed")
+      )
+    end)
+
+    it("reports warn when telescope.nvim is not installed", function()
+      local original_loaded = package.loaded["telescope"]
+      local original_preload = package.preload["telescope"]
+
+      rawset(package.loaded, "telescope", nil)
+      rawset(package.preload, "telescope", function()
+        error("module not found")
+      end)
+
+      health.check()
+
+      local telescope_warn_call = nil
+      for _, call in ipairs(vim.health.warn.calls or {}) do
+        if call.vals[1] == "telescope.nvim is not installed" then
+          telescope_warn_call = call
           break
         end
       end
-      assert.is_true(found)
+
+      assert.is_true(
+        common.find_stub_call(
+          vim.health.warn,
+          "telescope.nvim is not installed"
+        )
+      )
+
+      assert.is_true(telescope_warn_call ~= nil)
+      assert.is_true(type(telescope_warn_call.vals[2]) == "table")
+      assert.is_true(
+        telescope_warn_call.vals[2][1]
+          == "Optional dependency: enables Telescope UI for :Als pick_gpr"
+      )
+      assert.is_true(
+        telescope_warn_call.vals[2][2] == "Required for :Als project_files"
+      )
+
+      rawset(package.loaded, "telescope", original_loaded)
+      rawset(package.preload, "telescope", original_preload)
+    end)
+
+    it("reports Neovim >= 0.11 as ok", function()
+      vim.fn.has = stub.new().returns(1)
+      health.check()
+      assert.is_true(common.find_stub_call(vim.health.ok, "Neovim"))
     end)
 
     it("reports Neovim < 0.11 as error", function()
       vim.fn.has = stub.new().returns(0)
       health.check()
-      local found = false
-      for _, call in ipairs(vim.health.error.calls) do
-        if call.vals[1] and call.vals[1]:match("0.11") then
-          found = true
-          break
-        end
-      end
-      assert.is_true(found)
+      assert.is_true(common.find_stub_call(vim.health.error, "0.11"))
     end)
 
     it("reports plugin loaded when flag is set", function()
       vim.g.loaded_ada_ls = true
       health.check()
-      local found = false
-      for _, call in ipairs(vim.health.ok.calls) do
-        if call.vals[1] and call.vals[1]:match("Plugin loaded") then
-          found = true
-          break
-        end
-      end
-      assert.is_true(found)
+      assert.is_true(common.find_stub_call(vim.health.ok, "Plugin loaded"))
     end)
 
     it("reports plugin not loaded when flag is nil", function()
       vim.g.loaded_ada_ls = nil
       health.check()
-      local found = false
-      for _, call in ipairs(vim.health.warn.calls) do
-        if call.vals[1] and call.vals[1]:match("Plugin not loaded") then
-          found = true
-          break
-        end
-      end
-      assert.is_true(found)
+      assert.is_true(
+        common.find_stub_call(vim.health.warn, "Plugin not loaded")
+      )
+    end)
+
+    it("reports ok when server project is configured", function()
+      common.setup_utils_mock({ server_project = "my_project.gpr" })
+      health.check()
+      assert.is_true(common.find_stub_call(vim.health.ok, "ALS project:"))
+    end)
+
+    it("reports info when no server project configured", function()
+      common.setup_utils_mock()
+      health.check()
+      assert.is_true(
+        common.find_stub_call(vim.health.info, "No ALS project configured")
+      )
     end)
   end)
 
@@ -114,6 +167,46 @@ describe("ada_ls.health", function()
         local call_args = vim.health.ok.calls[1].vals
         assert.matches("gprbuild", call_args[1])
         assert.matches("24.0.0", call_args[1])
+      end)
+
+      it("warns when ada_language_server is older than supported", function()
+        vim.fn.executable = stub.new().returns(1)
+        vim.fn.system = stub.new().returns("ada_language_server 2026.1\n")
+
+        local result = health._check_executable("ada_language_server")
+
+        assert.is_true(result)
+        assert.stub(vim.health.warn).was_called()
+        local call_args = vim.health.warn.calls[1].vals
+        assert.matches("older than supported minimum 2027.0", call_args[1])
+      end)
+
+      it(
+        "reports ok when ada_language_server meets supported version",
+        function()
+          vim.fn.executable = stub.new().returns(1)
+          vim.fn.system = stub.new().returns("ada_language_server 2027.0\n")
+
+          local result = health._check_executable("ada_language_server")
+
+          assert.is_true(result)
+          assert.stub(vim.health.ok).was_called()
+          local call_args = vim.health.ok.calls[1].vals
+          assert.matches("supported: >= 2027.0", call_args[1])
+        end
+      )
+
+      it("warns when ada_language_server version is unparsable", function()
+        vim.fn.executable = stub.new().returns(1)
+        vim.fn.system =
+          stub.new().returns("ada_language_server version unknown\n")
+
+        local result = health._check_executable("ada_language_server")
+
+        assert.is_true(result)
+        assert.stub(vim.health.warn).was_called()
+        local call_args = vim.health.warn.calls[1].vals
+        assert.matches("version could not be determined", call_args[1])
       end)
 
       it(
@@ -144,6 +237,22 @@ describe("ada_ls.health", function()
           assert.matches("gnatprove", call_args[1])
         end
       )
+
+      it("uses provided advice for optional executables", function()
+        vim.fn.executable = stub.new().returns(0)
+
+        health._check_executable("tree-sitter", {
+          optional = true,
+          advice = {
+            "Install the tree-sitter CLI and ensure `tree-sitter` is available in PATH",
+          },
+        })
+
+        local call_args = vim.health.warn.calls[1]
+        local advice = call_args.vals[2]
+        assert.is_table(advice)
+        assert.matches("tree%-sitter CLI", advice[1])
+      end)
 
       it("uses custom version_arg when provided", function()
         vim.fn.executable = stub.new().returns(1)
@@ -202,6 +311,17 @@ describe("ada_ls.health", function()
         assert.is_nil(client)
         assert.stub(vim.health.error).was_called()
       end)
+
+      it("warns instead of errors when executable is unavailable", function()
+        vim.lsp.get_clients = stub.new().returns({})
+
+        local ok, client = health._check_lsp_client(false)
+
+        assert.is_false(ok)
+        assert.is_nil(client)
+        assert.stub(vim.health.warn).was_called()
+        assert.is_false(common.find_stub_call(vim.health.error, "not running"))
+      end)
     end)
 
     describe("_check_project_file", function()
@@ -221,11 +341,7 @@ describe("ada_ls.health", function()
           "nvim_buf_get_name",
           stub.new().returns("/project/main.adb")
         )
-        rawset(package.loaded, "ada_ls.utils", {
-          get_conf_file = function()
-            return "/project/.als.json"
-          end,
-        })
+        common.setup_utils_mock({ conf_file = "/project/.als.json" })
         rawset(package.loaded, "ada_ls.project", {
           decode_json_config = function()
             return "/project/test.gpr", "", {}
@@ -234,20 +350,12 @@ describe("ada_ls.health", function()
 
         health._check_project_file()
 
-        local found_conf = false
-        local found_prj = false
-        for _, call in ipairs(vim.health.ok.calls) do
-          if
-            call.vals[1] and call.vals[1]:match("Configuration file found")
-          then
-            found_conf = true
-          end
-          if call.vals[1] and call.vals[1]:match("Project file found") then
-            found_prj = true
-          end
-        end
-        assert.is_true(found_conf)
-        assert.is_true(found_prj)
+        assert.is_true(
+          common.find_stub_call(vim.health.ok, "Configuration file found")
+        )
+        assert.is_true(
+          common.find_stub_call(vim.health.ok, "Project file found")
+        )
       end)
 
       it("reports warn when .als.json not found", function()
@@ -256,24 +364,13 @@ describe("ada_ls.health", function()
           "nvim_buf_get_name",
           stub.new().returns("/project/main.adb")
         )
-        rawset(package.loaded, "ada_ls.utils", {
-          get_conf_file = function()
-            return nil
-          end,
-        })
+        common.setup_utils_mock()
 
         health._check_project_file()
 
-        local found = false
-        for _, call in ipairs(vim.health.warn.calls) do
-          if
-            call.vals[1] and call.vals[1]:match("Configuration file not found")
-          then
-            found = true
-            break
-          end
-        end
-        assert.is_true(found)
+        assert.is_true(
+          common.find_stub_call(vim.health.warn, "Configuration file not found")
+        )
       end)
 
       it("reports warn when project file not in config", function()
@@ -282,11 +379,7 @@ describe("ada_ls.health", function()
           "nvim_buf_get_name",
           stub.new().returns("/project/main.adb")
         )
-        rawset(package.loaded, "ada_ls.utils", {
-          get_conf_file = function()
-            return "/project/.als.json"
-          end,
-        })
+        common.setup_utils_mock({ conf_file = "/project/.als.json" })
         rawset(package.loaded, "ada_ls.project", {
           decode_json_config = function()
             return nil, nil, nil
@@ -295,14 +388,7 @@ describe("ada_ls.health", function()
 
         health._check_project_file()
 
-        local found = false
-        for _, call in ipairs(vim.health.warn.calls) do
-          if call.vals[1] and call.vals[1]:match("not configured") then
-            found = true
-            break
-          end
-        end
-        assert.is_true(found)
+        assert.is_true(common.find_stub_call(vim.health.warn, "not configured"))
       end)
     end)
 
@@ -329,14 +415,9 @@ describe("ada_ls.health", function()
 
         health._check_config()
 
-        local found = false
-        for _, call in ipairs(vim.health.ok.calls) do
-          if call.vals[1] and call.vals[1]:match("Configuration is valid") then
-            found = true
-            break
-          end
-        end
-        assert.is_true(found)
+        assert.is_true(
+          common.find_stub_call(vim.health.ok, "Configuration is valid")
+        )
       end)
 
       it("reports error when proof_level is invalid", function()
@@ -348,14 +429,9 @@ describe("ada_ls.health", function()
 
         health._check_config()
 
-        local found = false
-        for _, call in ipairs(vim.health.error.calls) do
-          if call.vals[1] and call.vals[1]:match("invalid proof_level") then
-            found = true
-            break
-          end
-        end
-        assert.is_true(found)
+        assert.is_true(
+          common.find_stub_call(vim.health.error, "invalid proof_level")
+        )
       end)
     end)
   end

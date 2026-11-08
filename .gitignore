@@ -1,1 +1,4 @@
 luacov.*.out
+.busted-test-env/
+media/
+scripts/
