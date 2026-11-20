@@ -180,6 +180,76 @@ describe("ada_ls.project", function()
     end)
   end)
 
+  describe("scenario variable configuration persistence", function()
+    local project
+    local directory
+
+    before_each(function()
+      common.cleanup_packages()
+      setup_base_mocks()
+      directory = os.tmpname()
+      os.remove(directory)
+      vim.call("mkdir", directory .. "/nested", "p")
+      rawset(vim.fs, "abspath", function(path)
+        return path
+      end)
+      project = require("ada_ls.project")
+    end)
+
+    after_each(function()
+      project.clear()
+      common.cleanup_packages()
+      vim.call("delete", directory, "rf")
+    end)
+
+    it(
+      "preserves settings and the original config location when editing a variable",
+      function()
+        local config_path = directory .. "/.als.json"
+        local existing = {
+          projectFile = "nested/test.gpr",
+          defaultCharset = "UTF-8",
+          enableDiagnostics = false,
+          scenarioVariables = { MODE = "debug", ARCH = "arm" },
+          custom = { enabled = true },
+        }
+        local file = assert(io.open(config_path, "w"))
+        file:write(vim.json.encode(existing))
+        file:close()
+        rawset(vim.json, "decode", function()
+          return vim.deepcopy(existing)
+        end)
+        local utils = require("ada_ls.utils")
+        utils.get_conf_file = function()
+          return config_path
+        end
+        utils.notify_server = stub.new()
+        package.loaded["ada_ls.gprtools"] = { makeprg_setup = stub.new() }
+
+        project.update_scenario_variable("MODE", "release")
+
+        file = assert(io.open(config_path, "r"))
+        local saved = file:read("*a")
+        file:close()
+        assert.matches('"projectFile":"nested/test.gpr"', saved)
+        assert.matches('"MODE":"release"', saved)
+        assert.matches('"ARCH":"arm"', saved)
+        assert.matches('"defaultCharset":"UTF%-8"', saved)
+        assert.matches('"enableDiagnostics":false', saved)
+        assert.matches('"custom":%{"enabled":true%}', saved)
+        assert.is_nil(io.open(directory .. "/nested/.als.json", "r"))
+        local expected = vim.deepcopy(existing)
+        expected.projectFile = directory .. "/nested/test.gpr"
+        expected.scenarioVariables.MODE = "release"
+        assert.stub(utils.notify_server).was_called_with(
+          "workspace/didChangeConfiguration",
+          { settings = { ada = expected } },
+          true
+        )
+      end
+    )
+  end)
+
   describe("pick_gpr_file", function()
     local project
 

@@ -102,6 +102,9 @@ end
 -- Vim function mocking
 function M.create_vim_fn_mock(overrides)
   local base_fn = {
+    shellescape = function(value, special)
+      return vim.call("shellescape", value, special and 1 or 0)
+    end,
     expand = function()
       return "/test/path/file.adb"
     end,
