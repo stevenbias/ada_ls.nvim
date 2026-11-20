@@ -84,6 +84,53 @@ describe("ada_ls.gprtools", function()
       )
     end)
 
+    it("passes scenario values as individual clean arguments", function()
+      common.setup_lsp_client(
+        common.create_lsp_client({ root_dir = "/project/root" })
+      )
+      project_mock.decode_json_config = function()
+        return "/project/my project.gpr",
+          "unused legacy string",
+          {
+            scenarioVariables = {
+              MODE = "release",
+              OUTPUT = "a directory's $value; #%!",
+              COUNT = 2,
+              EMPTY = "",
+            },
+          }
+      end
+
+      gprtools.clean()
+
+      assert.same({
+        "gprclean",
+        "-r",
+        "-P",
+        "/project/my project.gpr",
+        "-XCOUNT=2",
+        "-XEMPTY=",
+        "-XMODE=release",
+        "-XOUTPUT=a directory's $value; #%!",
+      }, vim.system.calls[1].vals[1])
+    end)
+
+    it("omits scenario arguments for an empty variable table", function()
+      common.setup_lsp_client(
+        common.create_lsp_client({ root_dir = "/project/root" })
+      )
+      project_mock.decode_json_config = function()
+        return "/project/root/test.gpr", "", { scenarioVariables = {} }
+      end
+
+      gprtools.clean()
+
+      assert.same(
+        { "gprclean", "-r", "-P", "/project/root/test.gpr" },
+        vim.system.calls[1].vals[1]
+      )
+    end)
+
     it("notifies success when gprclean succeeds", function()
       local mock_client =
         common.create_lsp_client({ root_dir = "/project/root" })
@@ -142,12 +189,87 @@ describe("ada_ls.gprtools", function()
   end)
 
   describe("makeprg_setup", function()
+    local function check_build_arguments(from_file)
+      local directory = os.tmpname()
+      os.remove(directory)
+      vim.call("mkdir", directory, "p")
+      local output = directory .. "/arguments"
+      local original_path = vim.call("getenv", "PATH")
+      local original_output = vim.call("getenv", "ADA_LS_TEST_ARGS")
+      local bufnr = vim.call("bufnr", "%")
+      local original_makeprg = vim.call("getbufvar", bufnr, "&makeprg")
+      local original_errorformat = vim.call("getbufvar", bufnr, "&errorformat")
+      local ok, err = pcall(function()
+        vim.call("writefile", {
+          "#!/bin/sh",
+          'printf "%s\\n" "$@" > "$ADA_LS_TEST_ARGS"',
+        }, directory .. "/gprbuild")
+        vim.call("setfperm", directory .. "/gprbuild", "rwx------")
+        vim.call("setenv", "PATH", directory .. ":" .. original_path)
+        vim.call("setenv", "ADA_LS_TEST_ARGS", output)
+
+        local config = {
+          projectFile = "/project/my project's #%!.gpr",
+          scenarioVariables = {
+            OUTPUT = "a directory's $value; `printf expanded` $(printf expanded) #%! <cword>",
+            EMPTY = "",
+          },
+        }
+        if from_file then
+          common.setup_lsp_client(
+            common.create_lsp_client({ root_dir = "/project/root" })
+          )
+          project_mock.decode_json_config = function()
+            return config.projectFile, "unused legacy string", config
+          end
+          gprtools.makeprg_setup()
+        else
+          gprtools.makeprg_setup(config)
+        end
+
+        -- Run Neovim's real :make so both Ex expansion and shell parsing apply.
+        vim.call("setbufvar", bufnr, "&makeprg", vim.bo.makeprg)
+        vim.call("setbufvar", bufnr, "&errorformat", vim.bo.errorformat)
+        local make_output = vim.call("execute", "silent make!")
+        assert.equals(1, vim.call("filereadable", output), make_output)
+        assert.same({
+          "-d",
+          "-p",
+          "-gnatef",
+          "-XEMPTY=",
+          "-XOUTPUT=" .. config.scenarioVariables.OUTPUT,
+          "-P",
+          config.projectFile,
+        }, vim.call("readfile", output))
+      end)
+
+      vim.call("setenv", "PATH", original_path)
+      vim.call("setenv", "ADA_LS_TEST_ARGS", original_output)
+      vim.call("setbufvar", bufnr, "&makeprg", original_makeprg)
+      vim.call("setbufvar", bufnr, "&errorformat", original_errorformat)
+      vim.call("delete", directory, "rf")
+      assert(ok, err)
+    end
+
+    it(
+      "preserves direct-config arguments through :make and the shell",
+      function()
+        check_build_arguments(false)
+      end
+    )
+
+    it("preserves file-config arguments through :make and the shell", function()
+      check_build_arguments(true)
+    end)
+
     it("sets vim.bo.makeprg when config is valid", function()
       local mock_client =
         common.create_lsp_client({ root_dir = "/project/root" })
       common.setup_lsp_client(mock_client)
       project_mock.decode_json_config = function()
-        return "/project/root/my_project.gpr", " -XMODE=debug"
+        return "/project/root/my_project.gpr",
+          " -XMODE=debug",
+          { scenarioVariables = { MODE = "debug" } }
       end
 
       gprtools.makeprg_setup()
@@ -246,7 +368,9 @@ describe("ada_ls.gprtools", function()
           common.create_lsp_client({ root_dir = "/project/root" })
         common.setup_lsp_client(mock_client)
         project_mock.decode_json_config = function()
-          return "/project/root/my_project.gpr", " -XMODE=debug"
+          return "/project/root/my_project.gpr",
+            " -XMODE=debug",
+            { scenarioVariables = { MODE = "debug" } }
         end
 
         local result = gprtools._gprbuild_cmd()
@@ -265,7 +389,9 @@ describe("ada_ls.gprtools", function()
           common.create_lsp_client({ root_dir = "/project/root" })
         common.setup_lsp_client(mock_client)
         project_mock.decode_json_config = function()
-          return "/project/root/test.gpr", " -XARCH=x86_64 -XDEBUG=true"
+          return "/project/root/test.gpr",
+            " -XARCH=x86_64 -XDEBUG=true",
+            { scenarioVariables = { ARCH = "x86_64", DEBUG = true } }
         end
 
         local result = gprtools._gprbuild_cmd()
@@ -278,7 +404,9 @@ describe("ada_ls.gprtools", function()
           common.create_lsp_client({ root_dir = "/project/root" })
         common.setup_lsp_client(mock_client)
         project_mock.decode_json_config = function()
-          return "/project/test.gpr", " -XMODE=release"
+          return "/project/test.gpr",
+            " -XMODE=release",
+            { scenarioVariables = { MODE = "release" } }
         end
 
         local result = gprtools._gprbuild_cmd(nil)
