@@ -414,8 +414,8 @@ function M.update_scenario_variable(var_name, var_value)
 
   M.scenario_variables[var_name] = var_value
 
-  local config = create_config()
-  save_config(config)
+  local config = create_config(json_config)
+  save_config(config, conf_file)
   notify_configuration_change(config, true)
 end
 
