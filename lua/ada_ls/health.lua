@@ -115,7 +115,7 @@ local function check_lsp_client(als_available)
     }
     if als_available == false then
       vim.health.warn("Ada Language Server not running", {
-        "Install ada_language_server and ensure it is available in PATH",
+        "Install ada_language_server",
         "Then reopen an Ada file and rerun :checkhealth ada_ls",
       })
     else
@@ -226,7 +226,6 @@ function M.check()
   local als_available = check_executable(ALS_EXECUTABLE, {
     advice = {
       "Install ada_language_server",
-      "Ensure ada_language_server is available in PATH",
       "Required for Ada Language Server features and :Als commands",
     },
   })

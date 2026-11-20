@@ -51,7 +51,7 @@ Features:
 REQUIREMENTS                                          *ada_ls-requirements*
 
 - Neovim >= 0.11 (developed and tested on 0.12)
-- Ada Language Server (ALS) >= 2027.0+ installed and available in PATH
+- Ada Language Server (ALS) >= 2027.0+ installed
 - GNAT project file (GPR) for your project
 - GNAT toolchain with gprbuild and gprclean
 - gnatprove for SPARK commands (optional)

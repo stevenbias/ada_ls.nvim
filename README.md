@@ -47,7 +47,7 @@ This plugin goes beyond standard LSP by providing:
 ## Requirements
 
 - **Neovim** >= 0.11 (developed and tested on 0.12)
-- **[Ada Language Server](https://github.com/AdaCore/ada_language_server)** >= 2027.0 - Must be available in `$PATH`
+- **[Ada Language Server](https://github.com/AdaCore/ada_language_server)** >= 2027.0
 - **GNAT** (`gprbuild`, `gprclean`) - Must be available in `$PATH`
 - **[SPARK](https://github.com/AdaCore/spark2014)** / `gnatprove` - Optional, required only for `:Spark` commands
 
@@ -323,7 +323,7 @@ is used.
 The Ada community has created several excellent tools for Neovim development. Here's how ada_ls.nvim fits into the ecosystem:
 
 - **[Ada Language Server (ALS)](https://github.com/AdaCore/ada_language_server)** — The core server that ada_ls.nvim wraps
-- **[gnattest.nvim](https://github.com/AdaCore/gnattest.nvim)** — Neovim plugin to support [GNATtest](https://github.com/AdaCore/gnattest) for test-driven development
+- **[gnattest.nvim](https://github.com/stevenbias/gnattest.nvim)** — Neovim plugin to support [GNATtest](https://github.com/AdaCore/gnattest) for test-driven development
 - **[Neovim Best Practices](https://github.com/lumen-oss/nvim-best-practices)** — Plugin development guidelines
 
 ### Neovim Ecosystem Integration
